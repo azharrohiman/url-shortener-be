@@ -135,6 +135,20 @@ New to the codebase? Read `ROADMAP.md` for the shape of the project, then
 
 ---
 
+## Contributing
+
+`main` is protected — all changes go through a pull request, squash-merged,
+with signed commits. Branch naming, pull request conventions, and the full
+workflow are documented in [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+After cloning, enable the repository's Git hooks:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+---
+
 ## Licence
 
 [MIT](./LICENSE)
