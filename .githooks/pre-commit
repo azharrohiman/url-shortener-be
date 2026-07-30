@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Refuse commits made directly on main.
+#
+# main is only ever updated by squash-merging a pull request on GitHub, so a
+# commit created here is always a mistake -- almost always "forgot to branch".
+#
+# To bypass deliberately:  git commit --no-verify
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$branch" = "main" ]; then
+	echo "Refusing to commit directly on main."
+	echo
+	echo "  Create a branch first:"
+	echo "    git switch -c feat/short-description"
+	echo
+	echo "  Anything already staged moves with you -- nothing is lost."
+	echo
+	exit 1
+fi
+
+exit 0
