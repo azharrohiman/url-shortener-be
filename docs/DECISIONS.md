@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-07-30_
+_Last updated: 2026-07-31_
 
 ---
 
@@ -69,7 +69,7 @@ via `docker compose -f compose.app.yaml up --build`.
 - **Why:** the sibling `url-shortener-fe` needs a runnable backend without its devs owning the
   Java toolchain. This is a primary use case, so the Dockerfile is a deliverable, not deferred.
 - **Why a *separate* compose file:** `compose.yaml` is consumed by the `spring-boot-docker-compose`
-  dev integration on `mvn spring-boot:run`. Putting the `app` service there would make backend
+  dev integration on `./mvnw spring-boot:run`. Putting the `app` service there would make backend
   devs spin up a containerised app too. `compose.app.yaml` `include:`s `compose.yaml` to reuse
   Postgres without duplication.
 - **Why multi-stage:** build with the Maven image (at the time this also sidestepped a broken
@@ -228,7 +228,7 @@ the single source of truth; `.env.example` is the committed template.
 
 - **Two consumers, one file:** Docker Compose auto-loads `.env` from the project directory;
   direnv exports the same values into the shell via `.envrc` (committed, one line:
-  `dotenv_if_exists .env`) for `psql` and `mvn spring-boot:run`. No duplication, so the two
+  `dotenv_if_exists .env`) for `psql` and `./mvnw spring-boot:run`. No duplication, so the two
   cannot drift.
 
 - **Fail fast, no defaults:** variables are declared `${VAR:?…}`. A missing `.env` aborts
@@ -238,7 +238,7 @@ the single source of truth; `.env.example` is the committed template.
   [WORKFLOW.md](./WORKFLOW.md). The alternative (`${VAR:-default}`) would have preserved
   zero-setup clone-and-run but kept the values in git, defeating the point.
 
-- **Unaffected:** `mvn test` — Testcontainers generates its own random per-run credentials
+- **Unaffected:** `./mvnw test` — Testcontainers generates its own random per-run credentials
   and reads none of this. `src/main/resources/application.yaml` has no datasource block at
   all (the `spring-boot-docker-compose` integration derives it from the running container),
   so no application code changed.
