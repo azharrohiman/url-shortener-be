@@ -3,20 +3,20 @@
 > How we build this project: **test-first (TDD)**, with the database provided by
 > containers. The app is *not* run-and-poke-in-Postman as the primary loop.
 
-_Last updated: 2026-07-30_
+_Last updated: 2026-07-31_
 
 ---
 
 ## Prerequisites
 
 - **JDK 21**. Maven itself is optional: `./mvnw` pins **Maven 3.9.11** and downloads it on
-  first use, so a fresh clone needs only a JDK. A system `mvn` works too — prefer `./mvnw`
-  for reproducibility, since it's the version CI would use.
+  first use, so a fresh clone needs only a JDK. A system `mvn` works too, but every command
+  in this project's docs uses `./mvnw` — it's reproducible, and it's the version CI would use.
 - **A running container runtime** (Docker Desktop, OrbStack, Colima, Podman, …).
   Testcontainers and the Compose integration both need a live Docker daemon. Check with
   `docker info`.
 - **A `.env` file** (see *Local credentials* below). Required before any `docker compose`
-  command; not needed for `mvn test`, which uses Testcontainers' own random credentials.
+  command; not needed for `./mvnw test`, which uses Testcontainers' own random credentials.
 
 ---
 
@@ -36,9 +36,9 @@ Two consumers read that one file:
   The variables are declared `${VAR:?}` (required), so a missing `.env` fails immediately
   with a readable message rather than starting a half-configured database.
 - **direnv** exports the same values into your shell via `.envrc`, so `psql` and
-  `mvn spring-boot:run` see them without you retyping anything.
+  `./mvnw spring-boot:run` see them without you retyping anything.
 
-`mvn test` needs none of this — Testcontainers generates throwaway credentials per run.
+`./mvnw test` needs none of this — Testcontainers generates throwaway credentials per run.
 
 > **Changing `POSTGRES_USER` or `POSTGRES_DB` later?** Postgres only creates the role and
 > database on *first* init against an empty data directory. Because `pgdata` is a persistent
@@ -63,8 +63,8 @@ Two consumers read that one file:
 Write the test and the code side by side. Run:
 
 ```bash
-mvn test                       # all tests
-mvn -Dtest=SomeClassTest test  # one class
+./mvnw test                       # all tests
+./mvnw -Dtest=SomeClassTest test  # one class
 ```
 
 - **Unit tests** cover pure logic with no Spring context and no DB — fast.
@@ -82,8 +82,8 @@ mvn -Dtest=SomeClassTest test  # one class
 When you genuinely want to hit an endpoint by hand:
 
 ```bash
-mvn spring-boot:test-run   # boots the app against a Testcontainers Postgres (throwaway)
-mvn spring-boot:run        # boots the app against the Compose Postgres (persistent)
+./mvnw spring-boot:test-run   # boots the app against a Testcontainers Postgres (throwaway)
+./mvnw spring-boot:run        # boots the app against the Compose Postgres (persistent)
 ```
 
 `spring-boot:test-run` uses `TestUrlShortenerApplication`. `spring-boot:run` uses the
