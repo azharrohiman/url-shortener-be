@@ -1,0 +1,16 @@
+# Keep the build context small and the build reproducible.
+target/
+.idea/
+.git/
+.gitignore
+*.iml
+.DS_Store
+docs/
+.mvn/
+mvnw
+mvnw.cmd
+
+# Credentials must never enter the build context, and so never a build layer.
+# The Dockerfile only COPYs pom.xml and src/, but this holds if that changes.
+.env
+.envrc

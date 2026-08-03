@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: 'postgres:18'
+    environment:
+      # Credentials come from .env (gitignored; see .env.example). Declared with
+      # `:?` so a missing .env fails fast instead of starting a half-configured DB.
+      - 'POSTGRES_DB=${POSTGRES_DB:?set it in .env — copy .env.example}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set it in .env — copy .env.example}'
+      - 'POSTGRES_USER=${POSTGRES_USER:?set it in .env — copy .env.example}'
+    ports:
+      # Fixed host:container mapping so local tools (psql/Postman) connect predictably.
+      - '5432:5432'
+    volumes:
+      # Named volume → data survives `docker compose down` / container removal.
+      # Use `docker compose down -v` to wipe it deliberately.
+      - 'pgdata:/var/lib/postgresql/data'
+    healthcheck:
+      # Lets the full-stack app service wait for `condition: service_healthy`
+      # (see compose.app.yaml). Also useful for the dev path.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

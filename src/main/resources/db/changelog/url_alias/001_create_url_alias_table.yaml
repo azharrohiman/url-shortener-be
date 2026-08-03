@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: azhar.rohiman_001
+      author: Azhar Rohiman
+      changes:
+        - sqlFile:
+            path: ../../sql/url_alias/001_create_url_alias_table.sql
+            relativeToChangelogFile: true
