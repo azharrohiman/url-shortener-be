@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: url-shortener
+
+  liquibase:
+    change-log: classpath:/db/changelog-master.yaml

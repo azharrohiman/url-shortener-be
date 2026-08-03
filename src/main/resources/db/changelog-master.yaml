@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: changelog/url_alias/001_create_url_alias_table.yaml
+      relativeToChangelogFile: true

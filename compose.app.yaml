@@ -1,0 +1,30 @@
+# Full local stack: Postgres + the containerised backend.
+#
+# For FRONTEND devs (or anyone who just wants a running backend with no JVM/IntelliJ):
+#   docker compose -f compose.app.yaml up --build
+# → Postgres + backend start, Liquibase applies the migration on app boot, API on :8080.
+#
+# Backend devs do NOT use this for the inner loop — they use `mvn test` /
+# `mvn spring-boot:run` (which uses the Postgres-only compose.yaml). See docs/WORKFLOW.md.
+
+# Reuse the Postgres service (incl. its healthcheck) from compose.yaml without duplicating it.
+include:
+  - compose.yaml
+
+services:
+  app:
+    build: .
+    ports:
+      - '8080:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # The container has no Docker, so the spring-boot-docker-compose dev integration
+      # must be off; we supply the datasource explicitly instead.
+      - 'SPRING_DOCKER_COMPOSE_ENABLED=false'
+      # Same .env values as the postgres service — Compose interpolates both from
+      # the one file, so the two services cannot drift apart.
+      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:?set it in .env — copy .env.example}'
+      - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:?set it in .env — copy .env.example}'
+      - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:?set it in .env — copy .env.example}'
