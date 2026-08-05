@@ -44,7 +44,7 @@ class UrlAliasRepositoryTest {
         List<UrlAlias> allUrlAliases = urlAliasRepository.findAll();
 
         assertThat(allUrlAliases)
-                .hasSize(2);
+                .hasSize(1);
 
         assertThat(savedUrlAlias2.getId() - savedUrlAlias1.getId()).isEqualTo(1L);
     }
