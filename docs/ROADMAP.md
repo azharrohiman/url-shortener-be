@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-07-28_
+_Last updated: 2026-08-10_
 
 ---
 
@@ -99,9 +99,32 @@ Reflects the actual state of the code as of the date above.
 - **`UrlShortenerApplicationTests` de-coupled** — the migration test now asserts table existence via
   `information_schema.tables` instead of `count(*) == 0`, which had made it depend on every other
   test class cleaning up (one shared Spring context = one shared Postgres).
+- **Step 3a (alias generator) — green.** Sqids added to `pom.xml` (pinned via a `sqids.version`
+  property — the version is part of the URL contract, so it's explicit and visible). `AliasGenerator`
+  wraps it: `encode(id) → String`, one shared immutable `Sqids` instance, alphabet and `minLength`
+  as package-private constants per [D14](./DECISIONS.md). `AliasGeneratorTest` is a plain unit test —
+  no Spring, no Docker, sub-second:
+  - **Generated aliases are alphanumeric only, no `-`/`_`** — parameterised over ids up to
+    `Long.MAX_VALUE`. This pins [D11](./DECISIONS.md)'s permanent invariant with a test rather than
+    good intentions, so an alphabet change can't silently break F4's namespace partition.
+  - The alphabet constant is 62 alphanumeric characters. Distinctness is covered indirectly —
+    Sqids' builder rejects duplicates, so 62 + no-duplicates + alphanumeric can only be a
+    permutation of all 62.
+  - 1000 distinct ids give 1000 distinct aliases (a *sample* of D1's bijection claim, not a proof),
+    encoding is deterministic across calls, and `minLength = 7` is honoured as a floor.
+  - Ids below 1 are rejected — defensive, since `SEQ_URL_ALIAS` starts at 1.
+  - The `minLength` assertion uses the literal `7`, not the constant, deliberately: mirroring the
+    constant would let a change to it pass unnoticed, and D14 makes that value revisable *but
+    deliberate*.
 
 ### In progress / partial
-- **Controller** — `POST /create` still echoes the URL back; placeholder, not the real contract (R4).
+- **Controller** — now maps `POST /api/v1/links` and returns **201**, but the body is an empty
+  `CreateUrlAliasResponseDto` and the service is not actually wired in (field is never injected).
+  `Location`/`shortUrl` are built from the *current request* URI, so they'd resolve under
+  `/api/v1/links/...` rather than root — contradicting D5 and the contract in
+  [DESIGN.md](./DESIGN.md). Still a placeholder; R4 stands until 3c.
+- **Controller test** — asserts status codes only; nothing yet checks the response body or the
+  `Location` header. Rewritten in 3c.
 - **Service** — `UrlShortenerService` is an empty shell.
 
 ### Next (immediate) — Step 3: create endpoint
@@ -109,21 +132,18 @@ Reflects the actual state of the code as of the date above.
 `POST /api/v1/links` → `encode(id)` stored in one INSERT → 201 with the documented body
 ([DESIGN.md](./DESIGN.md)). Resolves R4. Three increments, each independently testable:
 
-- **3a — Alias generator.** Add the Sqids dependency and wrap it in a small component
-  (`encode(long id) → String`). Plain unit test, no Spring, no DB. Assert distinct ids give distinct
-  aliases and — critically — that output is **alphanumeric with no `-`/`_`**, which is the permanent
-  [D11](./DECISIONS.md) invariant the whole custom-alias partition rests on. Put that in a test now,
-  while it's cheap, so a future alphabet change can't silently break F4.
-- **3b — Service.** `createShortLink(longUrl)` → persist `id` + `LONG_URL` + `URL_ALIAS` in a
-  **single INSERT** (D10). Integration test with Testcontainers.
+- ~~**3a — Alias generator.**~~ ✅ **Done** — see the status board above.
+- **3b — Service.** ← *next.* `createShortLink(longUrl)` → persist `id` + `LONG_URL` + `URL_ALIAS`
+  in a **single INSERT** (D10). Integration test with Testcontainers.
 - **3c — Controller.** Move `/create` → `POST /api/v1/links`, return **201** with
   `{alias, shortUrl, longUrl}`. Rewrite the existing controller test (it currently asserts 200 on
   `/create`). Add **CORS** here — first real endpoint the frontend will call ([WORKFLOW.md](./WORKFLOW.md)).
 
-**Decisions to make before/while building 3a–3c** (Tech Lead flags, not yet settled):
+**Decisions to make before/while building 3b–3c** (Tech Lead flags):
 
-1. **Sqids alphabet + `minLength`.** The alphabet is locked to alphanumeric forever by D11; the
-   *ordering* and `minLength` are free and revisable (D10 unfroze them). Needs a decision entry.
+1. ~~**Sqids alphabet + `minLength`.**~~ ✅ **Settled — [D14](./DECISIONS.md).** Own shuffled
+   alphanumeric alphabet, `minLength = 7`, default blocklist, all as constants in `AliasGenerator`.
+   Revisable (not frozen) because D10 stores the alias.
 2. **How the id is known before INSERT.** `persist()` under `GenerationType.SEQUENCE` assigns the id
    immediately, so the alias can be set before flush — but that ordering is load-bearing and subtle.
    Worth an explicit choice (and a comment) rather than something that happens to work.
