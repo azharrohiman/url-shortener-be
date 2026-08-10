@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-07-31_
+_Last updated: 2026-08-10_
 
 ---
 
@@ -291,10 +291,99 @@ environment, and we don't blur the two.
 
 ---
 
+### D14 — Sqids alphabet and `minLength`
+
+Settles the last configuration knobs before build-order step 3a. We use **our own shuffled
+permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the library's
+**default blocklist**. All three live as constants in `AliasGenerator`, not as configuration.
+
+- **Revisable, not frozen — the key point.** Because [D10](#d10--store-the-alias-reverses-d9)
+  **stores** the alias in `URL_ALIAS`, existing links are read from the column and never
+  re-encoded. Changing the alphabet ordering or `minLength` later therefore affects **new links
+  only** and breaks nothing already issued. [D9](#d9--derive-the-alias-dont-store-it) said the
+  opposite — under the derived model these values were part of the URL contract forever — and
+  that entry is superseded. Don't re-inherit its caution by accident.
+
+- **Why not the library's default alphabet.** The Sqids default is already alphanumeric, so it
+  satisfies [D11](#d11--partition-the-customgenerated-namespace-by-character-class) today. But D11
+  is a **permanent** invariant, and depending on an upstream default for a permanent invariant
+  means a library upgrade could break it silently, with no compile error and no test failure
+  unless we own the value. We declare it ourselves, with D11's rule as a comment beside the
+  constant, and a test asserting no `-`/`_` ever appears in generated output.
+
+- **Why a shuffled ordering.** The default alphabet is in alphabetical order, which makes the
+  sequential origin of a code more legible than it needs to be. Shuffling costs nothing.
+  Generated **once** offline and pasted in as a literal — never shuffled at runtime, which would
+  mint a different alphabet on every boot.
+
+- **Why `minLength = 7`.** With no minimum, `encode(1)` is a two-character code: it reads as a
+  toy and makes early enumeration trivial. Seven gives uniform-width codes regardless of id size
+  and matches the `aB3kZ9q` example already in [DESIGN.md](./DESIGN.md), so the contract doc and
+  the code agree without extra effort. 62⁷ ≈ 3.5 × 10¹² makes blind guessing tedious.
+
+- **Why the default blocklist stays on.** Sqids ships a profanity list and transparently picks a
+  different representation when an id would encode to a listed word. Kept deliberately, not by
+  omission — cheap insurance for a public service. Uniqueness is unaffected: distinct ids still
+  produce distinct codes.
+
+- **Why constants rather than configuration.** Three reasons, in order of weight:
+  1. A configurable alphabet could be set — via a property or environment variable, outside code
+     review — to a value containing `-` or `_`, silently breaking D11's partition and reopening
+     [R7](#r7--custom-alias-can-squat-a-generated-code). As a constant it cannot change without a
+     diff, and the D11 test guards it.
+  2. Every environment should mint the same shape of code. Configuration invites dev and prod to
+     drift apart for no benefit (harmless under D10, but confusing).
+  3. It keeps the 3a test a plain unit test — `new AliasGenerator()`, no Spring context, no test
+     properties.
+  Configuration would be justified if the value had to change without a redeploy, or if one
+  deployment had to mint several distinct code shapes. Neither is on the roadmap.
+
+- **Honest trade-off — the ids are guessable, and they count.** Ids come from a sequence, so they
+  are consecutive. Two distinct consequences, tracked as [R8](#r8--sequential-ids-leak-the-link-count-and-allow-enumeration):
+  - **Enumeration.** Anyone who recovers the alphabet — and
+    [D1](#d1--short-codes-via-sqids-over-a-db-sequence) concedes it is recoverable, since Sqids is
+    obfuscation, not encryption — can walk the range and retrieve every link ever created.
+    Hardcoding the alphabet doesn't cause this and hiding it wouldn't prevent it; the app
+    publishes a worked example of its own alphabet every time it returns a code. What the
+    alphabet actually changes is *cost*: without it, finding a live 7-character code means
+    searching 62⁷; with it, every guess is a hit.
+  - **The row count leaks in a single request** — the cheaper attack, and the one worth
+    understanding. Sqids is reversible by design (that is the basis of D1's collision-free
+    claim), so an attacker creates *one* link through the public API, decodes the returned
+    alias, and reads the sequence value straight out of it. That is the total number of links
+    ever issued. No probing, no 404 storm, nothing in the logs to notice. `minLength` padding
+    does not obscure it. (Same idea as estimating production from serial numbers: anything
+    counting upwards in public discloses how much of it there is.)
+
+  Both are acceptable **here** because the service is public and anonymous (D4): no accounts, no
+  ownership, no private data behind a code, and no business metric that a row count would expose.
+
+  - **The caveat worth stating:** a user may shorten a URL that is *itself* sensitive — an
+    "anyone with the link" document, a pre-signed storage URL — where the URL *is* the
+    credential. Enumeration hands it over. Not hypothetical: published research
+    ("Gone in Six Characters", Georgiev & Shmatikov, 2016) enumerated the short-code space of
+    goo.gl and bit.ly and recovered live cloud-storage documents, including writable ones.
+  - **What we'd do instead, if the audience stopped being anonymous (F7):** encrypt the id before
+    encoding it — run the sequence value through a small cipher with a real secret key, then
+    Sqids-encode the ciphertext. This **preserves D1's collision-free property in full** (a cipher
+    is still one number in, one number out, so two ids can never map to the same code) while
+    making the ordering unrecoverable, because the key is a genuine secret and — unlike the
+    alphabet — cannot be reconstructed from observed output. It would belong in `.env` under
+    [D12](#d12--local-credentials-via-env--direnv-never-committed). Preferred over switching to
+    random codes, which fixes the leak but throws away exactly the property the sequence was
+    chosen for and buys back collision detection and retry logic.
+
+- **Note:** the alphabet literal is **not** recorded here. `AliasGenerator` is the single source
+  of truth for the value; duplicating it in a doc guarantees the two eventually disagree. It is
+  also not a secret and does not belong in `.env` ([D12](#d12--local-credentials-via-env--direnv-never-committed)) —
+  putting a non-secret there erodes what that file means.
+
+---
+
 ## Open risks / things to fix
 
 > Issues surfaced early. R1–R3 and R6 resolved; R4–R5 remain; R7 opened by D10, fix decided in
-> D11 (pending F4).
+> D11 (pending F4); R8 opened by D14, accepted for v1.
 
 ### R1 — Migration is disabled ✅ RESOLVED
 The `001_create_url_alias_table` include in `changelog-master.yaml` is enabled; the changeset
@@ -350,3 +439,25 @@ tx/savepoint + a bound).
   mechanism disappears. Rule decided now; **enforced at F4** (unenforceable once non-conforming
   customs exist).
 - Full worked example, analysis, and options: [SCENARIO.md](./SCENARIO.md).
+
+### R8 — Sequential ids leak the link count and allow enumeration ⚠️ OPEN → ✅ ACCEPTED for v1 ([D14](#d14--sqids-alphabet-and-minlength))
+Aliases are derived from a consecutive sequence, so they are predictable: the whole link set can
+be walked, and — because Sqids is reversible (D1) — **one** created link decodes to the current
+sequence value, disclosing the total row count in a single request. Reasoning, the
+"Gone in Six Characters" precedent, and the preferred fix (encrypt the id before encoding, which
+keeps D1's collision-free property) are in
+[D14](#d14--sqids-alphabet-and-minlength); not repeated here.
+
+- **Classification, stated precisely:** this is **information disclosure through predictable
+  identifiers** (CWE-340) at the application layer. It is **not** a database vulnerability — no
+  SQL injection, no credential exposure, no unauthorised access to Postgres. It is also **not**
+  IDOR: that requires access control to bypass, and under D4 every link is public to everyone by
+  design, so there is no permission being circumvented.
+- **Accepted for v1** because the audience is public and anonymous: no accounts, no ownership, no
+  private data, no business metric behind the count. Residual exposure is limited to users who
+  shorten a URL that is itself a credential.
+- **Revisit when:** accounts/ownership land (F7), or any link is ever treated as private. Both
+  make the count and the enumeration meaningful, and the id-encryption fix becomes worth its
+  complexity.
+- **Explicitly not the fix:** rate limiting. It raises the cost of a slow walk but does nothing
+  about the one-request count disclosure, and it is out of scope by prior decision.
