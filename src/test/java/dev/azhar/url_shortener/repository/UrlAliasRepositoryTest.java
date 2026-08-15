@@ -32,11 +32,8 @@ class UrlAliasRepositoryTest {
 
     @Test
     void given_findAll_then_should_return_all_url_aliases() {
-        UrlAlias urlAlias = new UrlAlias("example.com", "abc");
-        UrlAlias urlAlias2 = new UrlAlias("example2.com", "def");
-
-        assertNull(urlAlias.getId());
-        assertNull(urlAlias2.getId());
+        UrlAlias urlAlias = new UrlAlias(1, "example.com", "abc");
+        UrlAlias urlAlias2 = new UrlAlias(2, "example2.com", "def");
 
         UrlAlias savedUrlAlias1 = urlAliasRepository.saveAndFlush(urlAlias);
         UrlAlias savedUrlAlias2 = urlAliasRepository.saveAndFlush(urlAlias2);
@@ -51,8 +48,8 @@ class UrlAliasRepositoryTest {
 
     @Test
     void given_findByAlias_then_should_return_url_alias() {
-        UrlAlias urlAlias1 = new UrlAlias("example.com", "abc");
-        UrlAlias urlAlias2 = new UrlAlias("example2.com", "def");
+        UrlAlias urlAlias1 = new UrlAlias(1, "example.com", "abc");
+        UrlAlias urlAlias2 = new UrlAlias(2, "example2.com", "def");
 
         urlAliasRepository.saveAndFlush(urlAlias1);
         urlAliasRepository.saveAndFlush(urlAlias2);
@@ -69,8 +66,8 @@ class UrlAliasRepositoryTest {
 
     @Test
     void given_long_url_is_not_unique_then_same_long_urls_can_be_saved() {
-        UrlAlias urlAlias1 = new UrlAlias("example.com", "abc");
-        UrlAlias urlAlias2 = new UrlAlias("example.com", "def");
+        UrlAlias urlAlias1 = new UrlAlias(1, "example.com", "abc");
+        UrlAlias urlAlias2 = new UrlAlias(2, "example.com", "def");
 
         urlAliasRepository.saveAndFlush(urlAlias1);
         urlAliasRepository.saveAndFlush(urlAlias2);
@@ -90,7 +87,7 @@ class UrlAliasRepositoryTest {
 
     @Test
     void given_null_long_url_is_saved_then_exception_is_thrown() {
-        UrlAlias urlAlias = new UrlAlias(null, "abc");
+        UrlAlias urlAlias = new UrlAlias(1, null, "abc");
 
         assertThrows(DataIntegrityViolationException.class,
                 () -> urlAliasRepository.saveAndFlush(urlAlias)
@@ -99,7 +96,7 @@ class UrlAliasRepositoryTest {
 
     @Test
     void given_null_url_alias_is_saved_then_exception_is_thrown() {
-        UrlAlias urlAlias = new UrlAlias("example.com", null);
+        UrlAlias urlAlias = new UrlAlias(1, "example.com", null);
 
         assertThrows(DataIntegrityViolationException.class,
                 () -> urlAliasRepository.saveAndFlush(urlAlias)
@@ -108,11 +105,11 @@ class UrlAliasRepositoryTest {
 
     @Test
     void given_duplicate_url_alias_is_saved_again_then_exception_is_thrown() {
-        UrlAlias urlAlias = new UrlAlias("example.com", "abc");
+        UrlAlias urlAlias = new UrlAlias(1, "example.com", "abc");
 
         urlAliasRepository.saveAndFlush(urlAlias);
 
-        UrlAlias duplicateUrlAlias = new UrlAlias("a-different-example.com", "abc");
+        UrlAlias duplicateUrlAlias = new UrlAlias(2, "a-different-example.com", "abc");
 
         assertThrows(DataIntegrityViolationException.class,
                 () -> urlAliasRepository.saveAndFlush(duplicateUrlAlias)
