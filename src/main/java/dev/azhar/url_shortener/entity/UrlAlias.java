@@ -2,10 +2,7 @@ package dev.azhar.url_shortener.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.Getter;
@@ -26,11 +23,6 @@ import org.hibernate.generator.EventType;
 public class UrlAlias {
 
     @Id
-    // allocationSize = 1 to match the DB sequence (created with the default increment of 1).
-    // Leaving Hibernate's default (50, pooled) would assume the sequence steps by 50 and could
-    // hand out colliding/duplicate ids. The Sqids code (D1) will be derived from this id.
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seqUrlAlias")
-    @SequenceGenerator(name = "seqUrlAlias", sequenceName = "SEQ_URL_ALIAS", allocationSize = 1)
     @Column(name = "ID")
     private Long id;
 
@@ -46,7 +38,8 @@ public class UrlAlias {
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    public UrlAlias(String longUrl, String urlAlias) {
+    public UrlAlias(long id, String longUrl, String urlAlias) {
+        this.id = id;
         this.longUrl = longUrl;
         this.urlAlias = urlAlias;
     }

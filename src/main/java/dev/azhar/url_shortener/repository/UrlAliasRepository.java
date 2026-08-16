@@ -3,6 +3,7 @@ package dev.azhar.url_shortener.repository;
 import dev.azhar.url_shortener.entity.UrlAlias;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -13,4 +14,7 @@ import org.springframework.stereotype.Repository;
 public interface UrlAliasRepository extends JpaRepository<UrlAlias, Long> {
 
     Optional<UrlAlias> findByUrlAlias(String urlAlias);
+
+    @Query("SELECT nextval('SEQ_URL_ALIAS')")
+    long getNextId();
 }
