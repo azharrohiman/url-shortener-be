@@ -9,7 +9,7 @@
 > ships generated-only (F1–F3), so there are no custom aliases to collide with and this cannot
 > occur yet. Documented now because the storage decision (D10) is made now.
 
-_Last updated: 2026-07-24_
+_Last updated: 2026-08-18_
 
 ---
 
@@ -100,9 +100,10 @@ what a motivated attacker can *engineer* even though nature never would.
 
 ## The concurrency angle (pushing back on the framing)
 
-Multiple concurrent requests do **not** make two *generators* collide with each other. With the
-`SEQUENCE` strategy and `allocationSize = 1` (see D10), each thread pulls a distinct `nextval`, so
-no two in-flight generated inserts ever target the same string. Concurrency doesn't multiply the
+Multiple concurrent requests do **not** make two *generators* collide with each other. Every create
+calls `nextval('SEQ_URL_ALIAS')` itself (see D10), and `nextval` is atomic and never returns the same
+value twice — even inside a rolled-back transaction — so each thread holds a distinct id and no two
+in-flight generated inserts ever target the same string. Concurrency doesn't multiply the
 *custom* collision — it only increases the aggregate count of wasted sequence values when a squat
 run exists.
 

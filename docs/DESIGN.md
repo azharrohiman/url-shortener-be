@@ -3,7 +3,7 @@
 > The agreed contract. Code should conform to this; where current code diverges it's
 > noted in [ROADMAP.md](./ROADMAP.md) and [DECISIONS.md](./DECISIONS.md).
 
-_Last updated: 2026-07-28_
+_Last updated: 2026-08-18_
 
 ---
 
@@ -76,8 +76,8 @@ Single table. Nothing to normalise yet; analytics (v2) would add a separate
 | `URL_ALIAS`  | `VARCHAR(64)`  | The short code. **Unique** (`UQ_URL_ALIAS`). For generated codes = `encode(ID)`. Width set by F4's 64-char custom-slug limit (D11). |
 | `CREATED_AT` | `TIMESTAMPTZ`  | Defaults to `now()`.                             |
 
-Plus sequence **`SEQ_URL_ALIAS`**, which feeds the PK; a generated alias is `encode(id)` of that PK,
-computed before insert (SEQUENCE strategy) and written in the same INSERT.
+Plus sequence **`SEQ_URL_ALIAS`**, which feeds the PK; a generated alias is `encode(id)` of that PK.
+The service reads `nextval` explicitly, encodes, and writes id + alias in the same INSERT (D10).
 
 ### Naming conventions (established in this repo)
 

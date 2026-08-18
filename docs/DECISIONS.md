@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-08-10_
+_Last updated: 2026-08-18_
 
 ---
 
@@ -22,10 +22,10 @@ We encode a `SEQ_URL_ALIAS` value with [Sqids](https://sqids.org) to produce the
   low-stakes — acceptable for our MVP.
 - **Implementation note:** Sqids needs the number *first*. Pull the sequence value
   before insert (or insert then encode-and-update). To be decided at build-order step 3.
-  > **Resolved via the SEQUENCE strategy (see [D10](#d10--store-the-alias-reverses-d9)).** With
-  > `GenerationType.SEQUENCE`, Hibernate fetches the id (`SELECT nextval`) *before* the INSERT,
-  > so we `encode(id)` in memory and write `id` + `alias` in a **single INSERT** — no pre-fetch
-  > beyond the intrinsic sequence call, and no follow-up update.
+  > **Resolved: pull the sequence value first (see [D10](#d10--store-the-alias-reverses-d9)).** The
+  > service reads `SELECT nextval('SEQ_URL_ALIAS')` itself, `encode(id)` in memory, then writes
+  > `id` + `alias` in a **single INSERT** — no follow-up update. (We chose an explicit query over
+  > `GenerationType.SEQUENCE`; the reasoning is under "How the id is assigned" in D10.)
 
 ### D2 — Redirect with HTTP 302 (not 301)
 - **Why:** 301 is cached hard by browsers; if we later add analytics or need to change a
@@ -126,9 +126,16 @@ We **persist** the alias in a `URL_ALIAS` column with a unique index, and look i
 This reverses [D9](#d9--derive-the-alias-dont-store-it) and restores the schema the pre-D9 code
 already had (column + `UQ_URL_ALIAS`).
 
-- **Create:** `SELECT nextval('SEQ_URL_ALIAS')` (Hibernate, SEQUENCE strategy) gives the `id`
-  *before* insert → `encode(id)` in memory → **single INSERT** writes `id` + `LONG_URL` + `URL_ALIAS`.
+- **Create:** the service calls `SELECT nextval('SEQ_URL_ALIAS')` **explicitly** — an
+  `@Query` on `UrlAliasRepository.getNextId()`, *not* a Hibernate id generator — then
+  `encode(id)` in memory and writes `id` + `LONG_URL` + `URL_ALIAS` in one INSERT.
 - **Redirect:** `findByUrlAlias(alias)` → **302** to `LONG_URL`, or **404**. One indexed lookup.
+
+> **Amended 2026-08-18 (rewrite, not an append).** This entry originally specified
+> `GenerationType.SEQUENCE` and let Hibernate fetch the id. The implementation instead assigns the
+> id manually. `DECISIONS.md` is append-only for *reversals of judgement*; this is a correction of a
+> factual claim about mechanism that would otherwise describe code that doesn't exist. The decision
+> itself — store the alias, one INSERT — is unchanged. See "How the id is assigned" below.
 
 - **Why we flipped:**
   - **Custom aliases (F4) are now confirmed coming**, and a stored column makes them *trivial*:
@@ -140,14 +147,59 @@ already had (column + `UQ_URL_ALIAS`).
   - **Simpler read path — the decode guard disappears entirely.** D9's mandatory
     decode→re-encode→compare dance existed *only* because the alias wasn't stored. Storing it means
     GET is just `findByUrlAlias`.
-  - **No extra round-trip** (the fear that pushed us to D9). Because we use a **sequence**, not
-    `IDENTITY`, the id is known before the INSERT; the alias rides along in the same INSERT. See the
-    resolved note on [D1](#d1--short-codes-via-sqids-over-a-db-sequence). (So **no** need to bump
-    `allocationSize`/`INCREMENT` to 50 — that would optimise a non-bottleneck and force the DB
-    increment and Hibernate `allocationSize` to move in lockstep. Keep `allocationSize = 1`.)
+  - **No insert-then-update** (the fear that pushed us to D9). Because the id comes from a
+    **sequence**, not `IDENTITY`, it is knowable before the INSERT, so the alias rides along in the
+    same INSERT rather than needing a follow-up `UPDATE`. See the resolved note on
+    [D1](#d1--short-codes-via-sqids-over-a-db-sequence).
   - **Sqids config is no longer frozen.** Since aliases are stored, the alphabet/salt/`minLength`
     can change for *new* links without breaking old ones (old aliases are read from the column, not
     recomputed). This retires D9's biggest lock-in; `minLength` becomes a low-stakes, revisable knob.
+
+- **How the id is assigned — explicit `nextval`, not a Hibernate id generator.**
+  `UrlAlias.id` is a plain `@Id` with **no** `@GeneratedValue` / `@SequenceGenerator`. The service
+  owns the whole step: read the sequence, encode, set both fields, save.
+
+  ```java
+  // UrlAliasRepository
+  @Query("SELECT nextval('SEQ_URL_ALIAS')")
+  long getNextId();
+
+  // UrlShortenerService.createShortLink
+  long nextId = urlAliasRepository.getNextId();
+  urlAlias.setId(nextId);
+  urlAlias.setLongUrl(longUrl);
+  urlAlias.setUrlAlias(aliasGenerator.encode(nextId));
+  return urlAliasRepository.save(urlAlias);
+  ```
+
+  - **Why:** the ordering `nextval → encode → INSERT` is **load-bearing** — the alias cannot exist
+    before the id does. Under `GenerationType.SEQUENCE` that ordering is real but *implicit*: it
+    depends on knowing that `persist()` assigns the id eagerly while `save()` on a detached-looking
+    entity does not, which is Hibernate lifecycle trivia rather than anything visible in the method.
+    Reading the sequence explicitly makes the dependency legible in three lines and removes a class
+    of subtle failure where a lifecycle detail changes and the alias silently encodes the wrong
+    number. The same `SEQ_URL_ALIAS`, the same single INSERT — only *who calls `nextval`* changed.
+  - **It also keeps R7's retry honest.** [R7](#r7--custom-alias-can-squat-a-generated-code)'s first
+    trap is that "advance to the next id" must be `nextval`, never `id + 1`. With the call already
+    in our own code, the retry is a second `getNextId()` — the correct move is the obvious one, not
+    a thing to remember.
+  - **Cost 1 — one extra round-trip per create.** Hibernate's SEQUENCE strategy can batch sequence
+    reads via `allocationSize`; a hand-written `SELECT nextval` is always its own statement. We're
+    not pooling ids, so create is `SELECT nextval` + `INSERT`. Accepted: create is the cold path
+    (the redirect is the hot one, D13), and pre-allocating ids would hand back the very
+    explicitness this buys. `allocationSize` no longer applies to us at all — the DB's `INCREMENT`
+    is the only place the step size lives, so the entity/DB lockstep D10 originally warned about is
+    gone.
+  - **Cost 2 — `save()` on an entity with a pre-set id issues a SELECT before the INSERT.**
+    Spring Data decides new-vs-existing by `id == null`; a manually assigned id makes the entity
+    look existing, so `save()` routes to `merge()`, which checks the row's existence first. That's
+    a *second* extra round-trip, and unlike cost 1 it buys nothing. Fixable by having `UrlAlias`
+    implement `Persistable<Long>` (or calling `EntityManager.persist` directly). **Flagged, not yet
+    applied** — see [R9](#r9--save-on-a-manually-assigned-id-issues-a-redundant-select).
+  - **Cost 3 — Liquibase and the entity are the only guard.** With no id generator, nothing in the
+    mapping references `SEQ_URL_ALIAS`; the string lives in a query. A rename in a migration breaks
+    at runtime, not at startup. Covered by `UrlShortenerServiceTest` running against a real
+    migrated Postgres (D6).
 
 - **Trade-offs (accepted):**
   - Reintroduces the `URL_ALIAS` column + `UQ_URL_ALIAS` index (storage + a secondary index).
@@ -383,7 +435,7 @@ permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the li
 ## Open risks / things to fix
 
 > Issues surfaced early. R1–R3 and R6 resolved; R4–R5 remain; R7 opened by D10, fix decided in
-> D11 (pending F4); R8 opened by D14, accepted for v1.
+> D11 (pending F4); R8 opened by D14, accepted for v1; R9 opened by D10's manual-id amendment.
 
 ### R1 — Migration is disabled ✅ RESOLVED
 The `001_create_url_alias_table` include in `changelog-master.yaml` is enabled; the changeset
@@ -404,9 +456,9 @@ duplication.
 > before any real data exists, so F4 needs no widening migration later. Generated aliases are
 > unaffected — they use a small fraction of the width.
 >
-> ⚠️ **Known drift:** `UrlAlias.urlAlias` still carries `@Column(length = 12)`. That attribute only
-> drives DDL generation, which we don't use (Liquibase owns the schema), so it's inert at
-> runtime — but it now misreports the real column. Align it to 64 when next touching the entity.
+> ✅ **Drift closed:** `UrlAlias.urlAlias` briefly carried `@Column(length = 12)` against a
+> `VARCHAR(64)` column. Inert at runtime (Liquibase owns the schema, not `ddl-auto`) but misleading;
+> the annotation now reads `length = 64` and matches.
 
 ### R4 — Controller doesn't match the contract yet
 `POST /create` echoes the URL; needs to become `POST /api/v1/links` returning the
@@ -461,3 +513,21 @@ keeps D1's collision-free property) are in
   complexity.
 - **Explicitly not the fix:** rate limiting. It raises the cost of a slow walk but does nothing
   about the one-request count disclosure, and it is out of scope by prior decision.
+
+### R9 — `save()` on a manually-assigned id issues a redundant SELECT ⚠️ OPEN (low priority)
+Under [D10](#d10--store-the-alias-reverses-d9)'s explicit-`nextval` approach, `UrlAlias.id` is set
+before `urlAliasRepository.save(...)`. Spring Data's `SimpleJpaRepository.save` decides new-vs-existing
+with `id == null`, so a pre-set id makes the entity look **existing** and the call routes to
+`EntityManager.merge()` rather than `persist()`. `merge` must first check whether the row is already
+there, so every create runs a `SELECT` that can only ever miss, then the `INSERT`.
+
+- **Correctness:** unaffected. The row is written correctly; this is purely a wasted round-trip.
+- **Why it's low priority:** create is the cold path — the redirect is the hot one
+  ([D13](#d13--no-local-performance-testing-the-local-check-is-the-query-plan)) — and the SELECT is
+  a PK lookup. Worth fixing because it's cheap and it *documents intent*, not because it's slow.
+- **Fix (either):** have `UrlAlias` implement `Persistable<Long>` returning `isNew() == true` for a
+  freshly built instance, or inject `EntityManager` and call `persist()` in the service, which says
+  "this is definitely an insert" in one word.
+- **Note for whoever fixes it:** this only shows up in the SQL log, not in a test assertion. If we
+  want it pinned, the test has to count statements (Hibernate's `SessionFactory` statistics), which
+  may be more machinery than the problem deserves. Decide when fixing.
