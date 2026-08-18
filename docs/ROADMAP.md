@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-08-10_
+_Last updated: 2026-08-18_
 
 ---
 
@@ -86,8 +86,6 @@ Reflects the actual state of the code as of the date above.
 - **Build-order step 2 (`TB_URL_ALIAS` live) — green.** Entity + repository in place and proven
   by `UrlAliasRepositoryTest` (7 tests, Testcontainers, no `@Transactional` so every assertion is
   against committed data):
-  - `SEQ_URL_ALIAS` drives `ID` and steps by exactly 1 — pins `@SequenceGenerator(allocationSize = 1)`
-    against the DB's increment, the mismatch D10 warns about.
   - The DB populates `CREATED_AT` (`@Generated(INSERT)`), asserted within a 5s window to absorb
     JVM-vs-container clock skew.
   - `findByUrlAlias` round-trips `urlAlias` + `longUrl`, and returns empty for an unknown alias —
@@ -116,16 +114,27 @@ Reflects the actual state of the code as of the date above.
   - The `minLength` assertion uses the literal `7`, not the constant, deliberately: mirroring the
     constant would let a change to it pass unnoticed, and D14 makes that value revisable *but
     deliberate*.
+- **Step 3b (service) — green.** `UrlShortenerService.createShortLink(longUrl)` reads the sequence,
+  encodes, and writes `id` + `LONG_URL` + `URL_ALIAS` in one INSERT, inside `@Transactional`.
+  `UrlShortenerServiceTest` is a Testcontainers `@SpringBootTest` against the migrated schema:
+  - **The id comes from an explicit `SELECT nextval('SEQ_URL_ALIAS')`** — `UrlAliasRepository.getNextId()`
+    — *not* from a Hibernate id generator. `UrlAlias.id` has no `@GeneratedValue`; the service assigns
+    it. This makes the load-bearing `nextval → encode → INSERT` ordering visible in the method instead
+    of resting on JPA lifecycle behaviour. Reasoning and its costs are in
+    [D10](./DECISIONS.md#d10--store-the-alias-reverses-d9) under "How the id is assigned".
+  - Three creates of the *same* long URL produce three rows with distinct aliases — the F1 behaviour
+    the repository test's "`LONG_URL` is not unique" assertion set up.
+  - A `null` URL throws `IllegalArgumentException` before touching the DB. Note this is a
+    *defensive* guard: `@Valid` on the DTO is the real barrier for HTTP callers (3c).
 
 ### In progress / partial
-- **Controller** — now maps `POST /api/v1/links` and returns **201**, but the body is an empty
-  `CreateUrlAliasResponseDto` and the service is not actually wired in (field is never injected).
-  `Location`/`shortUrl` are built from the *current request* URI, so they'd resolve under
-  `/api/v1/links/...` rather than root — contradicting D5 and the contract in
-  [DESIGN.md](./DESIGN.md). Still a placeholder; R4 stands until 3c.
+- **Controller** — maps `POST /api/v1/links`, returns **201**, and now calls the service. Two gaps
+  remain, both for 3c: the response body only sets `longUrl` (no `alias`, no `shortUrl`), and the
+  `Location` URI is built from the *current request* with an empty path segment, so it resolves under
+  `/api/v1/links/` rather than root — contradicting D5 and the contract in [DESIGN.md](./DESIGN.md).
+  R4 stands until 3c.
 - **Controller test** — asserts status codes only; nothing yet checks the response body or the
   `Location` header. Rewritten in 3c.
-- **Service** — `UrlShortenerService` is an empty shell.
 
 ### Next (immediate) — Step 3: create endpoint
 
@@ -133,27 +142,28 @@ Reflects the actual state of the code as of the date above.
 ([DESIGN.md](./DESIGN.md)). Resolves R4. Three increments, each independently testable:
 
 - ~~**3a — Alias generator.**~~ ✅ **Done** — see the status board above.
-- **3b — Service.** ← *next.* `createShortLink(longUrl)` → persist `id` + `LONG_URL` + `URL_ALIAS`
-  in a **single INSERT** (D10). Integration test with Testcontainers.
-- **3c — Controller.** Move `/create` → `POST /api/v1/links`, return **201** with
+- ~~**3b — Service.**~~ ✅ **Done** — see the status board above.
+- **3c — Controller.** ← *next.* Move `/create` → `POST /api/v1/links`, return **201** with
   `{alias, shortUrl, longUrl}`. Rewrite the existing controller test (it currently asserts 200 on
   `/create`). Add **CORS** here — first real endpoint the frontend will call ([WORKFLOW.md](./WORKFLOW.md)).
 
-**Decisions to make before/while building 3b–3c** (Tech Lead flags):
+**Decisions to make before/while building 3c** (Tech Lead flags):
 
 1. ~~**Sqids alphabet + `minLength`.**~~ ✅ **Settled — [D14](./DECISIONS.md).** Own shuffled
    alphanumeric alphabet, `minLength = 7`, default blocklist, all as constants in `AliasGenerator`.
    Revisable (not frozen) because D10 stores the alias.
-2. **How the id is known before INSERT.** `persist()` under `GenerationType.SEQUENCE` assigns the id
-   immediately, so the alias can be set before flush — but that ordering is load-bearing and subtle.
-   Worth an explicit choice (and a comment) rather than something that happens to work.
-3. **Base URL for `shortUrl`.** It's derived, not stored (DESIGN.md), so it needs a config property
+2. **Base URL for `shortUrl`.** It's derived, not stored (DESIGN.md), so it needs a config property
    with a sensible local default rather than a hardcoded `localhost:8080`.
 
 ### Deferred / low priority
 - **`UrlAlias` → `ShortenedUrl` rename** — style only; the name is accurate again under D10.
-- **`@Column(length = 12)` on `UrlAlias.urlAlias`** — column is really `VARCHAR(64)` (R3). Inert at
-  runtime (Liquibase owns the schema) but misleading; fix when next in that file.
+- **Redundant `SELECT` on create** — `save()` with a pre-assigned id routes through `merge()`, which
+  checks for the row before inserting. Correct, just a wasted round-trip on the cold path; fix via
+  `Persistable<Long>` or `EntityManager.persist`. See [R9](./DECISIONS.md).
+- **Dead assertion in `UrlAliasRepositoryTest.given_findAll_...`** — it asserts the two saved ids
+  differ by 1, but both are hardcoded (`1`, `2`) and the entity no longer has an id generator, so it
+  can't fail. Either drop it or move a real sequence-step assertion into `UrlShortenerServiceTest`,
+  which is where `nextval` is actually exercised now.
 - **`spring.jpa.hibernate.ddl-auto: validate`** — cheap boot-time guard against entity/schema drift.
 
 ### Backlog
