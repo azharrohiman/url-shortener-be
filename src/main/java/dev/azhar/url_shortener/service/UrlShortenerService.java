@@ -2,23 +2,21 @@ package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.entity.UrlAlias;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import static java.util.Objects.isNull;
 
 @Service
 @RequiredArgsConstructor
 public class UrlShortenerService {
 
+    private final EntityManager entityManager;
     private final AliasGenerator aliasGenerator;
     private final UrlAliasRepository urlAliasRepository;
 
     @Transactional
     public UrlAlias createShortLink(String longUrl) {
-        if (isNull(longUrl)) throw new IllegalArgumentException("URL cannot be null");
-
         UrlAlias urlAlias = new UrlAlias();
 
         long nextId = urlAliasRepository.getNextId();
@@ -27,6 +25,8 @@ public class UrlShortenerService {
         urlAlias.setLongUrl(longUrl);
         urlAlias.setUrlAlias(aliasGenerator.encode(nextId));
 
-        return urlAliasRepository.save(urlAlias);
+        entityManager.persist(urlAlias);
+
+        return urlAlias;
     }
 }
