@@ -1,6 +1,8 @@
 package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.entity.UrlAlias;
+import dev.azhar.url_shortener.mapper.UrlAliasMapper;
+import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -16,17 +18,15 @@ public class UrlShortenerService {
     private final UrlAliasRepository urlAliasRepository;
 
     @Transactional
-    public UrlAlias createShortLink(String longUrl) {
-        UrlAlias urlAlias = new UrlAlias();
-
+    public ShortLink createShortLink(String longUrl) {
         long nextId = urlAliasRepository.getNextId();
 
-        urlAlias.setId(nextId);
-        urlAlias.setLongUrl(longUrl);
-        urlAlias.setUrlAlias(aliasGenerator.encode(nextId));
+        UrlAlias urlAlias = new UrlAlias(nextId, longUrl, aliasGenerator.encode(nextId));
 
         entityManager.persist(urlAlias);
 
-        return urlAlias;
+        // The entity stops here. Callers get an immutable record, so nothing above this layer can
+        // hold — or accidentally mutate — a row that Hibernate is still managing.
+        return UrlAliasMapper.toShortLink(urlAlias);
     }
 }

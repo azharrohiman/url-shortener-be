@@ -2,6 +2,7 @@ package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.TestcontainersConfiguration;
 import dev.azhar.url_shortener.entity.UrlAlias;
+import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,9 +38,10 @@ class UrlShortenerServiceTest {
         String longUrl = "https://example.com";
 
         // when
-        urlShortenerService.createShortLink(longUrl);
-        urlShortenerService.createShortLink(longUrl);
-        urlShortenerService.createShortLink(longUrl);
+        List<ShortLink> createdShortLinks = List.of(
+                urlShortenerService.createShortLink(longUrl),
+                urlShortenerService.createShortLink(longUrl),
+                urlShortenerService.createShortLink(longUrl));
 
         List<UrlAlias> allUrlAliases = urlAliasRepository.findAll();
 
@@ -82,5 +84,16 @@ class UrlShortenerServiceTest {
         assertThat(allUrlAliases)
                 .extracting(UrlAlias::getLongUrl)
                 .containsOnly(longUrl);
+
+        // The service hands callers a ShortLink, never the entity: nothing above the service layer
+        // can hold a mutable, JPA-managed row. What it returns must be exactly what it persisted.
+        assertThat(createdShortLinks)
+                .extracting(ShortLink::longUrl)
+                .containsOnly(longUrl);
+
+        assertThat(createdShortLinks)
+                .extracting(ShortLink::alias)
+                .containsExactlyInAnyOrderElementsOf(
+                        allUrlAliases.stream().map(UrlAlias::getUrlAlias).toList());
     }
 }
