@@ -5,21 +5,30 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 /**
  * Maps the {@code TB_URL_ALIAS} table created by Liquibase changeset
  * {@code 001_create_url_alias_table}. One row per shortened URL.
+ *
+ * <p>No setters, and the no-arg constructor is {@code protected}: a row is fully specified the
+ * moment it is built, so there is no half-populated state for application code to create or leave
+ * behind. Construct one through the three-arg constructor.
+ *
+ * <p>The protected constructor exists for Hibernate, which instantiates the entity reflectively
+ * before populating it when reading a row — <b>do not delete it.</b> {@code protected} rather than
+ * {@code private} because a lazy-loading proxy is a generated subclass and has to call
+ * {@code super()}. Field access throughout (the mapping annotations sit on the fields), so
+ * Hibernate writes the fields directly and never needs a setter.
  */
 @Entity
 @Table(name = "TB_URL_ALIAS")
 @Getter
-@Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UrlAlias {
 
     @Id
