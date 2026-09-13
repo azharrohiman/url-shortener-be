@@ -3,7 +3,7 @@
 > The agreed contract. Code should conform to this; where current code diverges it's
 > noted in [ROADMAP.md](./ROADMAP.md) and [DECISIONS.md](./DECISIONS.md).
 
-_Last updated: 2026-08-18_
+_Last updated: 2026-09-08_
 
 ---
 
@@ -92,3 +92,20 @@ The service reads `nextval` explicitly, encodes, and writes id + alias in the sa
 | `longUrl`  | `LONG_URL`         |
 | `alias`    | `URL_ALIAS` (stored; generated = `encode(ID)`) |
 | `shortUrl` | derived (host + `alias`), not stored |
+
+---
+
+## Layers & types
+
+Three types describe the same link, one per boundary. Each stops where the next begins — see
+[DECISIONS.md](./DECISIONS.md) D15.
+
+| Layer | Type | Package | Purpose |
+|-------|------|---------|---------|
+| HTTP | `CreateUrlAliasRequestDto` / `CreateUrlAliasResponseDto` | `request` / `response` | The JSON contract above. Validation lives here. |
+| Service | `ShortLink` (record: `alias`, `longUrl`) | `model` | What the service returns. Immutable, no persistence concern. |
+| Persistence | `UrlAlias` (`@Entity`) | `entity` | Mirrors `TB_URL_ALIAS`. Never leaves the service layer. |
+
+`UrlAliasMapper.toShortLink(entity)` (package `mapper`) is the single crossing between the bottom
+two. The controller maps `ShortLink` → response DTO, and derives `shortUrl` there since it is the
+only layer that knows the request host.

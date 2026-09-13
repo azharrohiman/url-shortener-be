@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-08-18_
+_Last updated: 2026-09-08_
 
 ---
 
@@ -429,6 +429,72 @@ permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the li
   of truth for the value; duplicating it in a doc guarantees the two eventually disagree. It is
   also not a secret and does not belong in `.env` ([D12](#d12--local-credentials-via-env--direnv-never-committed)) —
   putting a non-secret there erodes what that file means.
+
+---
+
+### D15 — The service returns a domain record, never the entity
+
+`UrlShortenerService` returns **`ShortLink`** — an immutable `record` in `dev.azhar.url_shortener.model`
+carrying `alias` and `longUrl`. The `UrlAlias` entity stops at the service boundary. Translation is a
+static `UrlAliasMapper.toShortLink(entity)` in `dev.azhar.url_shortener.mapper`.
+
+- **Why, concretely.** `createShortLink` is `@Transactional`, so an entity returned from it reaches
+  the caller *detached* — mutable, and still carrying a JPA lifecycle that the web layer has no
+  business with. Returning a record makes that whole class of question disappear rather than
+  answering it carefully in every caller.
+
+- **Why a separate type rather than discipline.** The entity's shape is dictated by
+  `TB_URL_ALIAS`. Every column added for the database's sake — an expiry for F6, a click counter
+  for F5 — would otherwise become visible above the service for free. `ShortLink` widens only when
+  a caller actually needs it to.
+
+- **Deliberately narrower than the entity.** No `id`: it is a persistence detail, and it is exactly
+  the value [R8](#r8--sequential-ids-leak-the-link-count-and-allow-enumeration) says not to spread
+  around. No `createdAt`: it isn't in the [DESIGN.md](./DESIGN.md) contract. Add either when
+  something needs it, not in advance.
+
+- **Why the mapper is its own class.** A factory method on `ShortLink` would put a JPA import in the
+  domain; one on `UrlAlias` would point the dependency the other way. A separate mapper leaves both
+  ends ignorant of each other. Static rather than a Spring bean because it holds no state, and no
+  mapping framework (MapStruct et al.) because two fields do not pay for a code generator.
+
+- **Where the entity is still the right type.** Repository tests assert against rows — that is a
+  persistence assertion, and `UrlAliasRepository` continues to deal in `UrlAlias`. This decision is
+  about what leaves the *service*, not a ban on the entity.
+
+- **Revisit when:** a third layer needs a different projection of the same row, at which point the
+  question is whether `ShortLink` grows or a second record appears.
+
+---
+
+### D16 — The entity is construct-once: no setters, protected no-arg constructor
+
+`UrlAlias` drops `@Setter` and narrows `@NoArgsConstructor` to `AccessLevel.PROTECTED`. A row is
+built through the three-arg constructor `(id, longUrl, urlAlias)` and not mutated afterwards.
+
+- **Why:** a no-arg constructor plus setters lets any caller create a half-populated entity and
+  carry it around — the `NOT NULL` columns then fail at flush time, far from the code that left
+  them unset. The three-arg constructor makes an incompletely specified row unrepresentable, so
+  the compiler catches what was previously a runtime `DataIntegrityViolationException`.
+
+- **Why the constructor stays, protected.** Hibernate instantiates the entity reflectively and
+  *then* populates it when reading a row, so removing it entirely fails at metadata build — the
+  whole context, not just the write path. `protected` satisfies the JPA spec and is out of reach
+  of the service. Not `private`: a lazy-loading proxy is a generated subclass and must be able to
+  call `super()`.
+
+- **Setters aren't needed by Hibernate either.** The mapping annotations sit on the fields, so
+  Hibernate uses field access and writes fields directly — including `createdAt` under
+  `@Generated(INSERT)`.
+
+- **Trade-off — updates now need an explicit method.** With no setters there is nothing to mutate,
+  so dirty checking has no way to update a row. v1 never updates one (create and read only), but
+  [F6](./ROADMAP.md) (expiry/delete) will need a named, intention-revealing method on the entity
+  (`expire()`, say) rather than a setter. That is the better shape anyway: it names the state
+  transition instead of exposing the field.
+
+- **Pairs with [D15](#d15--the-service-returns-a-domain-record-never-the-entity):** D15 stops the
+  entity escaping the service; D16 makes it immutable in the one layer that still holds it.
 
 ---
 
