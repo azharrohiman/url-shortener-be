@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-08-18_
+_Last updated: 2026-09-13_
 
 ---
 
@@ -126,37 +126,44 @@ Reflects the actual state of the code as of the date above.
     the repository test's "`LONG_URL` is not unique" assertion set up.
   - A `null` URL throws `IllegalArgumentException` before touching the DB. Note this is a
     *defensive* guard: `@Valid` on the DTO is the real barrier for HTTP callers (3c).
+- **Entity no longer leaves the service — green.** `createShortLink` returns the `ShortLink` record
+  (`model` package) instead of the `UrlAlias` entity, mapped by static `UrlAliasMapper.toShortLink`
+  (`mapper` package). See [D15](./DECISIONS.md) for why, and the layer table in
+  [DESIGN.md](./DESIGN.md) for the three types and where each stops.
+  - `UrlAliasMapperTest` is a plain unit test — no Spring, no Docker.
+  - `UrlShortenerServiceTest` now also asserts the returned `ShortLink`s carry exactly the aliases
+    that were persisted, so the service can't return something other than what it wrote. Its
+    row-level assertions still go through the entity, which is correct for a persistence assertion.
+  - Fixed as a side effect: `UrlShortenerControllerTest`'s three valid-URL cases were **erroring**
+    with an NPE — the `@MockitoBean` service was never stubbed, so it returned `null`. They now stub
+    it and pass. Full suite: **28 tests green.**
+- **Entity is construct-once — green.** `UrlAlias` drops `@Setter`; `@NoArgsConstructor` is narrowed
+  to `AccessLevel.PROTECTED` (Hibernate needs it to read rows back — see
+  [D16](./DECISIONS.md)). The service builds the row in one three-arg constructor call instead of a
+  no-arg constructor plus three setters, so a half-populated entity no longer compiles. All tests
+  already used the three-arg constructor; `UrlAliasRepositoryTest` is the regression net, since it
+  reads entities back out of Postgres. Suite still **28 green**.
+- **Step 3c (controller) — green. Step 3 complete.** `POST /api/v1/links` returns **201** with
+  `{alias, shortUrl, longUrl}` and a `Location` header pointing at the root-level short URL.
+  `shortUrl` is built from the validated `app.base-url` property (`AppProperties`), not the request.
+  `UrlShortenerControllerTest` asserts all three body fields, the body size, and `Location`.
+  CORS was not added here — still in the backlog.
 
 ### In progress / partial
-- **Controller** — maps `POST /api/v1/links`, returns **201**, and now calls the service. Two gaps
-  remain, both for 3c: the response body only sets `longUrl` (no `alias`, no `shortUrl`), and the
-  `Location` URI is built from the *current request* with an empty path segment, so it resolves under
-  `/api/v1/links/` rather than root — contradicting D5 and the contract in [DESIGN.md](./DESIGN.md).
-  R4 stands until 3c.
-- **Controller test** — asserts status codes only; nothing yet checks the response body or the
-  `Location` header. Rewritten in 3c.
+- _Nothing in progress._
 
-### Next (immediate) — Step 3: create endpoint
+### Next (immediate) — Step 4: redirect endpoint
 
-`POST /api/v1/links` → `encode(id)` stored in one INSERT → 201 with the documented body
-([DESIGN.md](./DESIGN.md)). Resolves R4. Three increments, each independently testable:
+`GET /{alias}` → 302 to the long URL, 404 if unknown. `UrlAliasRepository.findByUrlAlias` already
+exists and is tested.
 
-- ~~**3a — Alias generator.**~~ ✅ **Done** — see the status board above.
-- ~~**3b — Service.**~~ ✅ **Done** — see the status board above.
-- **3c — Controller.** ← *next.* Move `/create` → `POST /api/v1/links`, return **201** with
-  `{alias, shortUrl, longUrl}`. Rewrite the existing controller test (it currently asserts 200 on
-  `/create`). Add **CORS** here — first real endpoint the frontend will call ([WORKFLOW.md](./WORKFLOW.md)).
-
-**Decisions to make before/while building 3c** (Tech Lead flags):
-
-1. ~~**Sqids alphabet + `minLength`.**~~ ✅ **Settled — [D14](./DECISIONS.md).** Own shuffled
-   alphanumeric alphabet, `minLength = 7`, default blocklist, all as constants in `AliasGenerator`.
-   Revisable (not frozen) because D10 stores the alias.
-2. **Base URL for `shortUrl`.** It's derived, not stored (DESIGN.md), so it needs a config property
-   with a sensible local default rather than a hardcoded `localhost:8080`.
+- **4a — Service.** ← *next.* Add `findByUrlAlias` to `UrlShortenerService`.
+- **4b — Controller.** Wire `findByUrlAlias` into `UrlShortenerController` for `GET /{alias}`.
 
 ### Deferred / low priority
-- **`UrlAlias` → `ShortenedUrl` rename** — style only; the name is accurate again under D10.
+- ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md) makes the point
+  moot: the domain noun now exists as `ShortLink`, and the entity's job is to mirror `TB_URL_ALIAS`,
+  so `UrlAlias` is the right name for it.
 - **Redundant `SELECT` on create** — `save()` with a pre-assigned id routes through `merge()`, which
   checks for the row before inserting. Correct, just a wasted round-trip on the cold path; fix via
   `Persistable<Long>` or `EntityManager.persist`. See [R9](./DECISIONS.md).
@@ -167,5 +174,5 @@ Reflects the actual state of the code as of the date above.
 - **`spring.jpa.hibernate.ddl-auto: validate`** — cheap boot-time guard against entity/schema drift.
 
 ### Backlog
-- Build-order steps 3–5 (create endpoint w/ Sqids, redirect, error polish), then v2 features F4–F7.
+- Build-order steps 4–5 (redirect, error polish), then v2 features F4–F7.
 - **CORS** config for the frontend, alongside the first real endpoint.
