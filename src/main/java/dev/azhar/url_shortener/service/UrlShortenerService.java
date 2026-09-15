@@ -1,6 +1,7 @@
 package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.entity.UrlAlias;
+import dev.azhar.url_shortener.exception.UrlNotFoundException;
 import dev.azhar.url_shortener.mapper.UrlAliasMapper;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
@@ -28,5 +29,11 @@ public class UrlShortenerService {
         // The entity stops here. Callers get an immutable record, so nothing above this layer can
         // hold — or accidentally mutate — a row that Hibernate is still managing.
         return UrlAliasMapper.toShortLink(urlAlias);
+    }
+
+    public String getLongUrl(String alias) {
+        return urlAliasRepository.findByUrlAlias(alias)
+                .map(UrlAlias::getLongUrl)
+                .orElseThrow(() -> new UrlNotFoundException(alias));
     }
 }

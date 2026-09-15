@@ -2,6 +2,7 @@ package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.TestcontainersConfiguration;
 import dev.azhar.url_shortener.entity.UrlAlias;
+import dev.azhar.url_shortener.exception.UrlNotFoundException;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Import;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -95,5 +97,48 @@ class UrlShortenerServiceTest {
                 .extracting(ShortLink::alias)
                 .containsExactlyInAnyOrderElementsOf(
                         allUrlAliases.stream().map(UrlAlias::getUrlAlias).toList());
+    }
+
+    @Test
+    void given_alias_when_getLongUrl_then_long_url_is_returned() {
+        // given
+        UrlAlias urlAlias1 = new UrlAlias(1, "example.com", "abc");
+        UrlAlias urlAlias2 = new UrlAlias(2, "example2.com", "def");
+
+        urlAliasRepository.save(urlAlias1);
+        urlAliasRepository.save(urlAlias2);
+
+        // when
+        String actual = urlShortenerService.getLongUrl("def");
+
+        // then
+        assertThat(actual)
+                .isEqualTo("example2.com");
+    }
+
+    @Test
+    void given_alias_is_uppercase_when_getLongUrl_in_lowercase_then_correct_throw_UrlNotFoundException() {
+        // given
+        UrlAlias urlAlias1 = new UrlAlias(1, "uppercase.com", "aBc");
+
+        urlAliasRepository.save(urlAlias1);
+
+        String lowercaseAlias = "abc";
+
+        // then
+        assertThatThrownBy(() -> urlShortenerService.getLongUrl(lowercaseAlias))
+                .isInstanceOf(UrlNotFoundException.class)
+                .hasMessage("No URL found with alias: " + lowercaseAlias);
+    }
+
+    @Test
+    void given_alias_for_non_existing_url_when_getLongUrl_then_throw_UrlNotFoundException() {
+        // given
+        String alias = "non-existing-alias";
+
+        // then
+        assertThatThrownBy(() -> urlShortenerService.getLongUrl(alias))
+                .isInstanceOf(UrlNotFoundException.class)
+                .hasMessage("No URL found with alias: " + alias);
     }
 }
