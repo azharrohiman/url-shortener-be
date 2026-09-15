@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-09-13_
+_Last updated: 2026-09-15_
 
 ---
 
@@ -148,17 +148,32 @@ Reflects the actual state of the code as of the date above.
   `shortUrl` is built from the validated `app.base-url` property (`AppProperties`), not the request.
   `UrlShortenerControllerTest` asserts all three body fields, the body size, and `Location`.
   CORS was not added here — still in the backlog.
+- **Step 4a (service) — green.** `UrlShortenerService.getLongUrl(alias)` calls `findByUrlAlias` and
+  returns the long URL as a `String`, or throws `UrlNotFoundException` (new, unchecked, `exception`
+  package). Named `getLongUrl` rather than the `findByUrlAlias` this board planned: it returns the URL,
+  not the row, and the entity still stays in the service ([D15](./DECISIONS.md)).
+  `UrlShortenerServiceTest` covers it with 3 new tests:
+  - **Found:** two rows are seeded straight through the repository — not via `createShortLink`, so a
+    bug there can't turn this test red — and the second alias is looked up. A lookup that ignored the
+    alias and returned any row would fail.
+  - **Aliases are case-sensitive:** `abc` and `aBc` are stored side by side and `abc` resolves to its
+    own URL. This matters because the Sqids alphabet mixes upper and lower case, so two aliases that
+    differ only in case are different links.
+  - **Not found:** an unknown alias throws `UrlNotFoundException`.
+  - Not yet decided: where `UrlNotFoundException` becomes a **404** (step 4b / 5).
+  - Full suite: **33 tests green.**
 
 ### In progress / partial
 - _Nothing in progress._
 
 ### Next (immediate) — Step 4: redirect endpoint
 
-`GET /{alias}` → 302 to the long URL, 404 if unknown. `UrlAliasRepository.findByUrlAlias` already
-exists and is tested.
+`GET /{alias}` → 302 to the long URL, 404 if unknown.
 
-- **4a — Service.** ← *next.* Add `findByUrlAlias` to `UrlShortenerService`.
-- **4b — Controller.** Wire `findByUrlAlias` into `UrlShortenerController` for `GET /{alias}`.
+- ~~**4a — Service.**~~ ✅ Done — `UrlShortenerService.getLongUrl(alias)` (see Done above).
+- **4b — Controller.** ← *next.* Wire `getLongUrl` into `UrlShortenerController` for `GET /{alias}`.
+  First decide where `UrlNotFoundException` turns into a 404: in the existing
+  `GlobalExceptionHandler`, or in the controller.
 
 ### Deferred / low priority
 - ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md) makes the point
