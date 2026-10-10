@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Import;
 
 import java.util.List;
 
+import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -156,7 +157,7 @@ class UrlShortenerServiceTest {
 
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(longAlias))
                 .isInstanceOf(AliasLengthLimitException.class)
-                .hasMessage(String.format("Alias length %d exceeds limit of 30.", longAlias.length()));
+                .hasMessage(String.format("Alias length %d exceeds limit of %d.", longAlias.length(), ALIAS_LENGTH_LIMIT));
     }
 
     @Test
