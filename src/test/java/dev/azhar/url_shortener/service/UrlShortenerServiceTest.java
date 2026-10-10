@@ -2,6 +2,7 @@ package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.TestcontainersConfiguration;
 import dev.azhar.url_shortener.entity.UrlAlias;
+import dev.azhar.url_shortener.exception.AliasLengthLimitException;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Import;
 
 import java.util.List;
 
+import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -117,6 +119,23 @@ class UrlShortenerServiceTest {
     }
 
     @Test
+    void given_alias_length_is_at_the_boundary_limit_then_response_contains_url_and_found_status() {
+        // given
+        String alias = "a".repeat(64);
+
+        UrlAlias urlAlias1 = new UrlAlias(1, "example.com", alias);
+
+        urlAliasRepository.save(urlAlias1);
+
+        // when
+        String actual = urlShortenerService.getLongUrl(alias);
+
+        // then
+        assertThat(actual)
+                .isEqualTo("example.com");
+    }
+
+    @Test
     void given_alias_is_uppercase_when_getLongUrl_in_lowercase_then_correct_throw_UrlNotFoundException() {
         // given
         UrlAlias urlAlias1 = new UrlAlias(1, "uppercase.com", "aBc");
@@ -129,6 +148,16 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(lowercaseAlias))
                 .isInstanceOf(UrlNotFoundException.class)
                 .hasMessage("No URL found with alias: " + lowercaseAlias);
+    }
+
+    @Test
+    void given_alias_length_exceeds_limit_then_throw_AliasLengthLimitException() {
+        // given
+        String longAlias = "a".repeat(65);
+
+        assertThatThrownBy(() -> urlShortenerService.getLongUrl(longAlias))
+                .isInstanceOf(AliasLengthLimitException.class)
+                .hasMessage(String.format("Alias length %d exceeds limit of %d.", longAlias.length(), ALIAS_LENGTH_LIMIT));
     }
 
     @Test
