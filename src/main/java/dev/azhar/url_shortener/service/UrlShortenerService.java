@@ -1,6 +1,7 @@
 package dev.azhar.url_shortener.service;
 
 import dev.azhar.url_shortener.entity.UrlAlias;
+import dev.azhar.url_shortener.exception.AliasLengthLimitException;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
 import dev.azhar.url_shortener.mapper.UrlAliasMapper;
 import dev.azhar.url_shortener.model.ShortLink;
@@ -9,6 +10,8 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,10 @@ public class UrlShortenerService {
     }
 
     public String getLongUrl(String alias) {
+        if (alias.length() > ALIAS_LENGTH_LIMIT) {
+            throw new AliasLengthLimitException(alias.length());
+        }
+
         return urlAliasRepository.findByUrlAlias(alias)
                 .map(UrlAlias::getLongUrl)
                 .orElseThrow(() -> new UrlNotFoundException(alias));
