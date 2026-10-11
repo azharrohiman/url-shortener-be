@@ -119,9 +119,9 @@ class UrlShortenerServiceTest {
     }
 
     @Test
-    void given_alias_length_is_at_the_boundary_limit_then_response_contains_url_and_found_status() {
+    void given_alias_length_is_at_the_boundary_limit_then_long_url_is_returned() {
         // given
-        String alias = "a".repeat(64);
+        String alias = "a".repeat(ALIAS_LENGTH_LIMIT);
 
         UrlAlias urlAlias1 = new UrlAlias(1, "example.com", alias);
 
@@ -153,7 +153,7 @@ class UrlShortenerServiceTest {
     @Test
     void given_alias_length_exceeds_limit_then_throw_AliasLengthLimitException() {
         // given
-        String longAlias = "a".repeat(65);
+        String longAlias = "a".repeat(ALIAS_LENGTH_LIMIT + 1);
 
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(longAlias))
                 .isInstanceOf(AliasLengthLimitException.class)
