@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-09-08_
+_Last updated: 2026-10-12_
 
 ---
 
@@ -500,8 +500,8 @@ built through the three-arg constructor `(id, longUrl, urlAlias)` and not mutate
 
 ## Open risks / things to fix
 
-> Issues surfaced early. R1–R3 and R6 resolved; R4–R5 remain; R7 opened by D10, fix decided in
-> D11 (pending F4); R8 opened by D14, accepted for v1; R9 opened by D10's manual-id amendment.
+> Issues surfaced early. R1–R4, R6 and R9 resolved; R5 remains; R7 opened by D10, fix decided in
+> D11 (pending F4); R8 opened by D14, accepted for v1.
 
 ### R1 — Migration is disabled ✅ RESOLVED
 The `001_create_url_alias_table` include in `changelog-master.yaml` is enabled; the changeset
@@ -526,10 +526,12 @@ duplication.
 > `VARCHAR(64)` column. Inert at runtime (Liquibase owns the schema, not `ddl-auto`) but misleading;
 > the annotation now reads `length = 64` and matches.
 
-### R4 — Controller doesn't match the contract yet
+### R4 — Controller doesn't match the contract yet ✅ RESOLVED
 `POST /create` echoes the URL; needs to become `POST /api/v1/links` returning the
 documented response (see [DESIGN.md](./DESIGN.md)). Tests reference `/create` and assert
 200 on success — both will change when the real endpoint lands.
+> ✅ **Resolved in build-order step 3c:** `POST /api/v1/links` returns 201 with the documented
+> body, and the tests assert it. `POST /create` is gone.
 
 ### R5 — `@URL` accepts `ftp:`/`file:` schemes
 The existing test treats `ftp://example` and `file:some-file` as valid. If we want to
@@ -580,7 +582,7 @@ keeps D1's collision-free property) are in
 - **Explicitly not the fix:** rate limiting. It raises the cost of a slow walk but does nothing
   about the one-request count disclosure, and it is out of scope by prior decision.
 
-### R9 — `save()` on a manually-assigned id issues a redundant SELECT ⚠️ OPEN (low priority)
+### R9 — `save()` on a manually-assigned id issues a redundant SELECT ⚠️ OPEN (low priority) → ✅ RESOLVED
 Under [D10](#d10--store-the-alias-reverses-d9)'s explicit-`nextval` approach, `UrlAlias.id` is set
 before `urlAliasRepository.save(...)`. Spring Data's `SimpleJpaRepository.save` decides new-vs-existing
 with `id == null`, so a pre-set id makes the entity look **existing** and the call routes to
@@ -597,3 +599,6 @@ there, so every create runs a `SELECT` that can only ever miss, then the `INSERT
 - **Note for whoever fixes it:** this only shows up in the SQL log, not in a test assertion. If we
   want it pinned, the test has to count statements (Hibernate's `SessionFactory` statistics), which
   may be more machinery than the problem deserves. Decide when fixing.
+
+> ✅ **Resolved:** `UrlShortenerService.createShortLink` now calls `entityManager.persist(...)`
+> instead of `save(...)`, so create is a single `INSERT`. Not pinned by a statement-count test.

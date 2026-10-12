@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-09-15_
+_Last updated: 2026-10-12_
 
 ---
 
@@ -162,26 +162,41 @@ Reflects the actual state of the code as of the date above.
   - **Not found:** an unknown alias throws `UrlNotFoundException`.
   - Not yet decided: where `UrlNotFoundException` becomes a **404** (step 4b / 5).
   - Full suite: **33 tests green.**
+- **Step 4b (controller) — green. Step 4 complete.** `GET /{alias}` calls `getLongUrl` and returns
+  **302** with `Location: <longUrl>`. Exceptions become responses in `GlobalExceptionHandler`, which
+  settles the open question from 4a. The full contract, with bodies, is in [DESIGN.md](./DESIGN.md).
+  - **404** — `UrlNotFoundException` → `{ "message": ... }`.
+  - **400 for an over-long alias** — `getLongUrl` rejects an alias longer than `ALIAS_LENGTH_LIMIT`
+    (64, the width of `URL_ALIAS`) with `AliasLengthLimitException` before querying. The service
+    tests cover both sides of the boundary: exactly 64 resolves, 65 throws.
+  - **500 for an unusable stored URL** — if `LONG_URL` can't be parsed into a `Location` header, the
+    controller throws `BrokenLinkException`. The handler logs it with the alias and returns a fixed
+    message that doesn't echo the stored URL.
+  - `UrlShortenerControllerTest` covers 302, 404, 400 and 500 for the redirect.
+  - **`CreateAndRedirectJourneyTest`** — the first end-to-end test. A real HTTP server on a random
+    port, the real service, and a Testcontainers Postgres, with nothing mocked. It creates a link,
+    takes the path from the returned `shortUrl`, and follows it, asserting the 302 and `Location`.
+    The client is set to never follow redirects, so the 302 itself is what gets asserted. This is the
+    only test that proves the alias create stores is the alias redirect finds.
+  - Full suite: **40 tests green.**
+- **R9 fixed as a side effect.** The service now writes the row with `EntityManager.persist`, not
+  `save()`, so create no longer runs a redundant `SELECT` first.
 
 ### In progress / partial
 - _Nothing in progress._
 
-### Next (immediate) — Step 4: redirect endpoint
+### Next (immediate) — Step 5: error-handling polish
 
-`GET /{alias}` → 302 to the long URL, 404 if unknown.
-
-- ~~**4a — Service.**~~ ✅ Done — `UrlShortenerService.getLongUrl(alias)` (see Done above).
-- **4b — Controller.** ← *next.* Wire `getLongUrl` into `UrlShortenerController` for `GET /{alias}`.
-  First decide where `UrlNotFoundException` turns into a 404: in the existing
-  `GlobalExceptionHandler`, or in the controller.
+Error bodies currently come in two shapes: validation failures return `{ "<field>": "<reason>" }`,
+and every other error returns `{ "message": "..." }`. Step 5 picks one shape for all of them.
+Decide the shape first, record it in [DECISIONS.md](./DECISIONS.md), then change the handler.
 
 ### Deferred / low priority
 - ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md) makes the point
   moot: the domain noun now exists as `ShortLink`, and the entity's job is to mirror `TB_URL_ALIAS`,
   so `UrlAlias` is the right name for it.
-- **Redundant `SELECT` on create** — `save()` with a pre-assigned id routes through `merge()`, which
-  checks for the row before inserting. Correct, just a wasted round-trip on the cold path; fix via
-  `Persistable<Long>` or `EntityManager.persist`. See [R9](./DECISIONS.md).
+- ~~**Redundant `SELECT` on create**~~ — ✅ **fixed** by switching to `EntityManager.persist`
+  (see Done above, and [R9](./DECISIONS.md)).
 - **Dead assertion in `UrlAliasRepositoryTest.given_findAll_...`** — it asserts the two saved ids
   differ by 1, but both are hardcoded (`1`, `2`) and the entity no longer has an id generator, so it
   can't fail. Either drop it or move a real sequence-step assertion into `UrlShortenerServiceTest`,
@@ -189,5 +204,5 @@ Reflects the actual state of the code as of the date above.
 - **`spring.jpa.hibernate.ddl-auto: validate`** — cheap boot-time guard against entity/schema drift.
 
 ### Backlog
-- Build-order steps 4–5 (redirect, error polish), then v2 features F4–F7.
-- **CORS** config for the frontend, alongside the first real endpoint.
+- Build-order step 5 (error polish), then v2 features F4–F7.
+- **CORS** config for the frontend. Still not added, although both endpoints are now live.

@@ -3,7 +3,7 @@
 > The agreed contract. Code should conform to this; where current code diverges it's
 > noted in [ROADMAP.md](./ROADMAP.md) and [DECISIONS.md](./DECISIONS.md).
 
-_Last updated: 2026-09-08_
+_Last updated: 2026-10-12_
 
 ---
 
@@ -22,7 +22,8 @@ Content-Type: application/json
 { "url": "https://example.com/some/very/long/path" }
 ```
 
-**201 Created**
+**201 Created**, with `Location: <shortUrl>`. `shortUrl` is built from the `app.base-url`
+property, not from the incoming request.
 ```json
 {
   "alias":    "aB3kZ9q",
@@ -36,21 +37,38 @@ Content-Type: application/json
 { "url": "URL must not exceed 2048 characters" }
 ```
 
-> Current stub maps `POST /create` and echoes the URL. It will move to `POST /api/v1/links`
-> and return the response shape above (build-order step 3).
-
 ### 2. Redirect
 
 ```
 GET /{alias}
 ```
 
-- **302 Found** with `Location: <longUrl>` when the alias exists.
-- **404 Not Found** when it doesn't.
+**302 Found** with `Location: <longUrl>` when the alias exists. No body.
+
+**400 Bad Request** — the alias is longer than 64 characters, the width of `URL_ALIAS`. Rejected
+before the database is queried, since no stored alias can match it:
+```json
+{ "message": "Alias length 65 exceeds limit of 64." }
+```
+
+**404 Not Found** — no row has this alias. Aliases are case-sensitive:
+```json
+{ "message": "No URL found with alias: aB3kZ9q" }
+```
+
+**500 Internal Server Error** — a row exists, but its `LONG_URL` can't be turned into a valid
+`Location` header. That is a fault on our side, not the caller's, so it is logged with the alias.
+The body is fixed and doesn't echo the stored URL:
+```json
+{ "message": "This link is broken on our side. Let the person who shared it know." }
+```
 
 The alias is **stored** in the `URL_ALIAS` column (see [DECISIONS.md](./DECISIONS.md) D10), so
 resolution is a single indexed lookup: `findByUrlAlias(alias)` → **302** to `LONG_URL`, else **404**.
 No decode/re-encode guard is needed — that was only required by the derived-alias model (D9).
+
+> The error bodies are not yet one shape: validation failures return `{ "<field>": "<reason>" }`,
+> everything else returns `{ "message": "..." }`. Unifying them is build-order step 5.
 
 302 (not 301) is intentional — see [DECISIONS.md](./DECISIONS.md) D2.
 
