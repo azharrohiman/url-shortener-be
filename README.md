@@ -11,9 +11,7 @@ reasoning lives in [`docs/`](./docs), not just in the commit history.
 
 ## Architecture
 
-The diagrams below cover v1 only. Each one declares its nodes (or participants)
-first and its edges (or messages) after, so adding a component later — a cache,
-say — means adding one node and its edges rather than redrawing the diagram.
+The diagrams below cover v1 only.
 
 ### System overview
 
