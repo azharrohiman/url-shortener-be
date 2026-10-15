@@ -3,7 +3,7 @@
 > The agreed contract. Code should conform to this; where current code diverges it's
 > noted in [ROADMAP.md](./ROADMAP.md) and [DECISIONS.md](./DECISIONS.md).
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-15_
 
 ---
 
@@ -32,9 +32,18 @@ property, not from the incoming request.
 }
 ```
 
-**400 Bad Request** — missing/blank URL, malformed URL, or longer than 2048 chars:
+**400 Bad Request** — missing/blank URL, malformed URL, or longer than 2048 chars. Every failed
+check is listed, so one field can appear more than once:
 ```json
-{ "url": "URL must not exceed 2048 characters" }
+{
+  "status":  400,
+  "title":   "The payload is invalid",
+  "detail":  "The payload has one or more validation errors, please fix them and try again.",
+  "validation": [
+    { "field": "url", "message": "URL is not valid." },
+    { "field": "url", "message": "URL must not exceed 2048 characters." }
+  ]
+}
 ```
 
 ### 2. Redirect
@@ -48,29 +57,56 @@ GET /{alias}
 **400 Bad Request** — the alias is longer than 64 characters, the width of `URL_ALIAS`. Rejected
 before the database is queried, since no stored alias can match it:
 ```json
-{ "message": "Alias length 65 exceeds limit of 64." }
+{
+  "status":  400,
+  "title":   "Alias too long",
+  "detail":  "Alias length 65 exceeds limit of 64."
+}
 ```
 
 **404 Not Found** — no row has this alias. Aliases are case-sensitive:
 ```json
-{ "message": "No URL found with alias: aB3kZ9q" }
+{
+  "status":  404,
+  "title":   "URL not found",
+  "detail":  "No URL found with alias: aB3kZ9q"
+}
 ```
 
 **500 Internal Server Error** — a row exists, but its `LONG_URL` can't be turned into a valid
 `Location` header. That is a fault on our side, not the caller's, so it is logged with the alias.
 The body is fixed and doesn't echo the stored URL:
 ```json
-{ "message": "This link is broken on our side. Let the person who shared it know." }
+{
+  "status":  500,
+  "title":   "Broken link",
+  "detail":  "This link is broken on our side. Let the person who shared it know."
+}
 ```
 
 The alias is **stored** in the `URL_ALIAS` column (see [DECISIONS.md](./DECISIONS.md) D10), so
 resolution is a single indexed lookup: `findByUrlAlias(alias)` → **302** to `LONG_URL`, else **404**.
 No decode/re-encode guard is needed — that was only required by the derived-alias model (D9).
 
-> The error bodies are not yet one shape: validation failures return `{ "<field>": "<reason>" }`,
-> everything else returns `{ "message": "..." }`. Unifying them is build-order step 5.
-
 302 (not 301) is intentional — see [DECISIONS.md](./DECISIONS.md) D2.
+
+### Error responses
+
+Every error, on either endpoint, returns one body shape based on RFC 9457 ("Problem Details for
+HTTP APIs"). `status`, `title` and `detail` are standard RFC members; `validation` is an extension
+member, which the RFC allows:
+
+| Field        | Type   | Always present? | Meaning |
+|--------------|--------|-----------------|---------|
+| `status`     | number | yes | The HTTP status code, repeated in the body (`400`, `404`, `500`). |
+| `title`      | string | yes | Short summary of the kind of error. Fixed per error type, so it never varies between two occurrences of the same error. |
+| `detail`     | string | yes | What caused this occurrence and, where the caller can act on it, how to fix it. |
+| `validation` | array  | only on request-validation failures | One entry `{ "field", "message" }` per failed check. Omitted, not empty, on every other error. |
+
+- `validation` lists **every** failed check, so the same `field` can appear more than once.
+  Entry order is not guaranteed; clients and tests must not rely on it.
+- 500 bodies never carry internal detail (stack traces, stored values). The cause goes to the
+  log, not the response.
 
 ---
 
