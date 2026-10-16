@@ -103,6 +103,8 @@ member, which the RFC allows:
 | `detail`     | string | yes | What caused this occurrence and, where the caller can act on it, how to fix it. |
 | `validation` | array  | only on request-validation failures | One entry `{ "field", "message" }` per failed check. Omitted, not empty, on every other error. |
 
+- Error bodies are sent with `Content-Type: application/problem+json`, the media type RFC 9457
+  defines, so clients can tell an error body from a success body without parsing it.
 - `validation` lists **every** failed check, so the same `field` can appear more than once.
   Entry order is not guaranteed; clients and tests must not rely on it.
 - 500 bodies never carry internal detail (stack traces, stored values). The cause goes to the
