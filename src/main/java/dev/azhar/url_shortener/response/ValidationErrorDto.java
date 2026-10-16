@@ -3,7 +3,8 @@ package dev.azhar.url_shortener.response;
 import lombok.Builder;
 
 @Builder
-public record AliasLengthLimitResponseDto(
+public record ValidationErrorDto(
+        String field,
         String message
 ) {
 }

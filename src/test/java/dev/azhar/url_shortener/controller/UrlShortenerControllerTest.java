@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
+import static org.hamcrest.Matchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -79,7 +80,13 @@ class UrlShortenerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(blankUrlDto))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.url").exists());
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("The payload is invalid"))
+                .andExpect(jsonPath("$.detail").value("The payload has one or more validation errors, please fix them and try again."))
+                .andExpect(jsonPath("$.validation.length()").value(1))
+                .andExpect(jsonPath("$.validation[0].field").value("url"))
+                .andExpect(jsonPath("$.validation[0].message").value("URL must not be blank."));
 
         verifyNoInteractions(urlShortenerService);
     }
@@ -98,7 +105,13 @@ class UrlShortenerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidUrlDto))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.url").exists());
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("The payload is invalid"))
+                .andExpect(jsonPath("$.detail").value("The payload has one or more validation errors, please fix them and try again."))
+                .andExpect(jsonPath("$.validation.length()").value(1))
+                .andExpect(jsonPath("$.validation[0].field").value("url"))
+                .andExpect(jsonPath("$.validation[0].message").value("URL is not valid."));
 
         verifyNoInteractions(urlShortenerService);
     }
@@ -119,7 +132,40 @@ class UrlShortenerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(longUrlDto))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.url").value("URL must not exceed 2048 characters"));
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("The payload is invalid"))
+                .andExpect(jsonPath("$.detail").value("The payload has one or more validation errors, please fix them and try again."))
+                .andExpect(jsonPath("$.validation.length()").value(1))
+                .andExpect(jsonPath("$.validation[0].field").value("url"))
+                .andExpect(jsonPath("$.validation[0].message").value("URL must not exceed 2048 characters."));
+
+        verifyNoInteractions(urlShortenerService);
+    }
+
+    @Test
+    void given_url_is_invalid_and_greater_than_2048_when_create_then_400_lists_both_errors() throws Exception {
+        // given
+        String invalidLongUrl = "a".repeat(2049);
+
+        String invalidLongUrlDto = """
+                {
+                    "url": "%s"
+                }
+                """.formatted(invalidLongUrl);
+
+        // then
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/links")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidLongUrlDto))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.validation.length()").value(2))
+                .andExpect(jsonPath("$.validation[*].field").value(everyItem(is("url"))))
+                .andExpect(jsonPath("$.validation[*].message").value(containsInAnyOrder(
+                        "URL is not valid.",
+                        "URL must not exceed 2048 characters."
+                )));
 
         verifyNoInteractions(urlShortenerService);
     }
@@ -136,7 +182,13 @@ class UrlShortenerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(emptyRequest))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.url").exists());
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("The payload is invalid"))
+                .andExpect(jsonPath("$.detail").value("The payload has one or more validation errors, please fix them and try again."))
+                .andExpect(jsonPath("$.validation.length()").value(1))
+                .andExpect(jsonPath("$.validation[0].field").value("url"))
+                .andExpect(jsonPath("$.validation[0].message").value("URL must not be blank."));
 
         verifyNoInteractions(urlShortenerService);
     }
@@ -155,7 +207,13 @@ class UrlShortenerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(nullUrlRequest))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.url").exists());
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("The payload is invalid"))
+                .andExpect(jsonPath("$.detail").value("The payload has one or more validation errors, please fix them and try again."))
+                .andExpect(jsonPath("$.validation.length()").value(1))
+                .andExpect(jsonPath("$.validation[0].field").value("url"))
+                .andExpect(jsonPath("$.validation[0].message").value("URL must not be blank."));
 
         verifyNoInteractions(urlShortenerService);
     }
@@ -185,9 +243,12 @@ class UrlShortenerControllerTest {
         // then
         mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", unknownAlias))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
-                        .value(String.format("No URL found with alias: %s", unknownAlias))
-                );
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.title").value("URL not found"))
+                .andExpect(jsonPath("$.detail")
+                        .value(String.format("No URL found with alias: %s", unknownAlias)))
+                .andExpect(jsonPath("$.validation").doesNotExist());
     }
 
     @Test
@@ -199,8 +260,12 @@ class UrlShortenerControllerTest {
         // then
         mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", "some-alias"))
                 .andExpect(MockMvcResultMatchers.status().isInternalServerError())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
-                        .value("This link is broken on our side. Let the person who shared it know."));
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.title").value("Broken link"))
+                .andExpect(jsonPath("$.detail")
+                        .value("This link is broken on our side. Let the person who shared it know."))
+                .andExpect(jsonPath("$.validation").doesNotExist());
     }
 
     @Test
@@ -214,8 +279,11 @@ class UrlShortenerControllerTest {
         // then
         mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", longAlias))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
-                        .value(String.format("Alias length %d exceeds limit of %d.", longAlias.length(), ALIAS_LENGTH_LIMIT))
-                );
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Alias too long"))
+                .andExpect(jsonPath("$.detail")
+                        .value(String.format("Alias length %d exceeds limit of %d.", longAlias.length(), ALIAS_LENGTH_LIMIT)))
+                .andExpect(jsonPath("$.validation").doesNotExist());
     }
 }
