@@ -26,13 +26,17 @@ public class UrlShortenerController {
     public ResponseEntity<Void> redirect(@PathVariable String alias) {
         String url = urlShortenerService.getLongUrl(alias);
 
+        URI uri;
+
         try {
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(url))
-                    .build();
+            uri = URI.create(url);
         } catch (IllegalArgumentException e) {
-            throw new BrokenLinkException(e, url);
+            throw new BrokenLinkException(alias, e);
         }
+
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(uri)
+                .build();
     }
 
     @PostMapping("/api/v1/links")
