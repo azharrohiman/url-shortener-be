@@ -1,6 +1,7 @@
 package dev.azhar.url_shortener.controller;
 
 import dev.azhar.url_shortener.exception.AliasLengthLimitException;
+import dev.azhar.url_shortener.exception.BrokenLinkException;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.service.UrlShortenerService;
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
@@ -252,20 +254,27 @@ class UrlShortenerControllerTest {
     }
 
     @Test
-    void given_long_url_is_malformed_when_redirect_then_internal_server_error() throws Exception {
+    void given_long_url_is_malformed_when_redirect_then_internal_server_error_and_alias_is_reported_in_BrokenLinkException() throws Exception {
         // given
-        given(urlShortenerService.getLongUrl("some-alias"))
+        String alias = "some-alias";
+
+        given(urlShortenerService.getLongUrl(alias))
                 .willReturn("malformed url");
 
         // then
-        mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", "some-alias"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", alias))
                 .andExpect(MockMvcResultMatchers.status().isInternalServerError())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.title").value("Broken link"))
                 .andExpect(jsonPath("$.detail")
                         .value("This link is broken on our side. Let the person who shared it know."))
-                .andExpect(jsonPath("$.validation").doesNotExist());
+                .andExpect(jsonPath("$.validation").doesNotExist())
+                .andExpect(result -> assertThat(result.getResolvedException())
+                        .isInstanceOfSatisfying(BrokenLinkException.class, ex -> {
+                            assertThat(ex.getAlias()).isEqualTo(alias);
+                            assertThat(ex).hasCauseInstanceOf(IllegalArgumentException.class);
+                        }));
     }
 
     @Test
