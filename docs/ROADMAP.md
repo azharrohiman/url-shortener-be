@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-19_
 
 ---
 
@@ -181,15 +181,30 @@ Reflects the actual state of the code as of the date above.
   - Full suite: **40 tests green.**
 - **R9 fixed as a side effect.** The service now writes the row with `EntityManager.persist`, not
   `save()`, so create no longer runs a redundant `SELECT` first.
+- **Step 5 (error-handling polish) — green. Build order complete.** Error bodies used to come in two
+  shapes: validation failures returned `{ "<field>": "<reason>" }`, and every other error returned
+  `{ "message": "..." }`. Every error now returns one shape based on RFC 9457 — `status`, `title`,
+  `detail`, plus a `validation` list on validation failures only — sent as
+  `application/problem+json`. The contract is in [DESIGN.md](./DESIGN.md) under "Error responses".
+  - `ErrorResponseDto` + `ValidationErrorDto` replace the three single-field `*ResponseDto`s, and
+    every handler in `GlobalExceptionHandler` builds its response through one helper that sets the
+    status and content type.
+  - **Fixed as a side effect:** the old handler collected validation errors into a `HashMap` keyed by
+    field, so when `url` failed two checks the second overwrote the first. They are now a list, and
+    a new test sends a URL that fails both `@URL` and `@Size` and asserts both are reported, in any
+    order.
+  - All three checks on `CreateUrlAliasRequestDto` now carry their own messages instead of the
+    framework defaults.
+  - `UrlShortenerControllerTest` asserts content type, `status`, `title` and `detail` on every error
+    case, and that `validation` is absent on non-validation errors.
+  - Full suite: **41 tests green.**
 
 ### In progress / partial
 - _Nothing in progress._
 
-### Next (immediate) — Step 5: error-handling polish
+### Next (immediate)
 
-Error bodies currently come in two shapes: validation failures return `{ "<field>": "<reason>" }`,
-and every other error returns `{ "message": "..." }`. Step 5 picks one shape for all of them.
-Decide the shape first, record it in [DECISIONS.md](./DECISIONS.md), then change the handler.
+_Not yet decided._
 
 ### Deferred / low priority
 - ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md) makes the point
@@ -204,5 +219,5 @@ Decide the shape first, record it in [DECISIONS.md](./DECISIONS.md), then change
 - **`spring.jpa.hibernate.ddl-auto: validate`** — cheap boot-time guard against entity/schema drift.
 
 ### Backlog
-- Build-order step 5 (error polish), then v2 features F4–F7.
+- v2 features F4–F7.
 - **CORS** config for the frontend. Still not added, although both endpoints are now live.
