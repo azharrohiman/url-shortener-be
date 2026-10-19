@@ -24,6 +24,10 @@ completeness, and we build in small, independently testable increments.
 - **Two capabilities only:**
   1. Create a short link from a long URL.
   2. Redirect a short code to its original URL (HTTP 302).
+- **Operational basics** — not features, but v1 isn't done without them:
+  - A **health-check endpoint** that reports whether the app is up and can reach the database.
+  - **Structured logging** — log lines as JSON, one named field per piece of information, so
+    they can be searched and filtered.
 
 ### Out of scope for v1 (candidate v2)
 
@@ -204,7 +208,32 @@ Reflects the actual state of the code as of the date above.
 
 ### Next (immediate)
 
-_Not yet decided._
+The build order is complete, but v1 is not: the two operational basics in the v1 scope are
+still missing. Load testing comes after them, and **before** Analytics (F5) — F5 adds work to
+the redirect path, and its cost can only be measured against a baseline taken without it
+([D13](./DECISIONS.md) names F5 as the first change worth measuring).
+
+1. **Finish v1** — each one test-first, each its own PR:
+   - **Health check** — add `spring-boot-starter-actuator` and expose `/actuator/health`,
+     including the database check. A load test needs it to know the app is ready before load
+     starts; any deployment needs it for the same reason.
+   - **Structured logging** — JSON log output, so a failed load test can be investigated.
+   - **Keep debug logging out of the default config.** SQL and parameter logging
+     (`org.hibernate.SQL`, `org.hibernate.orm.jdbc.bind`) and Hibernate statistics belong in a
+     `local` profile, switched on with `SPRING_PROFILES_ACTIVE=local`. Left on by default, they
+     write several lines per request — a load test would measure the logger, not the app — and
+     they copy every submitted long URL into the logs.
+2. **Gatling script, run locally as a rehearsal only.** Proves the script works and the app
+   returns no errors when many requests arrive at once. The numbers are thrown away, never
+   recorded — D13's point that laptop numbers mean nothing still stands. Record this as a new
+   decision refining D13 before starting.
+
+Later steps, in order — detail to be planned when we reach them:
+
+3. **Performance environment** — see Backlog.
+4. **Baseline run** against realistic data (a few million rows). Record throughput (requests
+   per second) and p99 latency (the response time 99 in 100 requests beat).
+5. **F5 (Analytics)**, then re-run the same test and compare against the baseline.
 
 ### Deferred / low priority
 - ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md) makes the point
@@ -220,4 +249,13 @@ _Not yet decided._
 
 ### Backlog
 - v2 features F4–F7.
+- **Performance environment** for load testing — a temporary cloud setup that is created,
+  tested against, and deleted afterwards. Ground rules:
+  - The **same Docker image** as everywhere else; only settings change, through environment
+    variables (as [D12](./DECISIONS.md) already does for credentials). `app.base-url` must be set
+    per environment — it defaults to `http://localhost:8080`; the environment variable `APP_BASEURL` overrides it (Spring drops the dash when mapping
+    property names to variable names).
+  - **Gatling runs on a separate machine** from the app and database, so the two don't compete
+    for CPU.
+  - Hosting provider and budget not yet decided.
 - **CORS** config for the frontend. Still not added, although both endpoints are now live.
