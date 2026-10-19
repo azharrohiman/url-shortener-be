@@ -63,7 +63,7 @@ sequenceDiagram
     ctrl->>ctrl: Validate request (not blank, valid URL, max 2048 chars)
 
     alt Request is invalid
-        ctrl-->>fe: 400 Bad Request {"url": "<reason>"}
+        ctrl-->>fe: 400 Bad Request, application/problem+json<br/>{status, title, detail, validation: [{field, message}]}
     else Request is valid
         ctrl->>svc: createShortLink(url)
         rect rgba(128, 128, 128, 0.12)
@@ -82,7 +82,9 @@ sequenceDiagram
 ```
 
 The controller validates the request body before any work is done, so a bad URL
-never reaches the database. For a valid URL, the service takes the next id from
+never reaches the database. A rejected request gets the same error shape as
+every other error in the API, based on RFC 9457 ("Problem Details"), and its
+`validation` list names every check that failed, not just the first. For a valid URL, the service takes the next id from
 the `SEQ_URL_ALIAS` sequence, encodes it into a non-sequential alias with Sqids,
 and writes the id, long URL and alias in a single `INSERT`. The id is known
 before the row exists, which is why the alias can be stored in the same write
@@ -143,7 +145,7 @@ responses by `GlobalExceptionHandler`.
 
 **v1 is in progress.** Both endpoints are built and covered by tests, including
 an end-to-end test that creates a link and follows it against a real Postgres.
-What remains is making the error responses consistent.
+Every error response, on either endpoint, now has one consistent shape.
 
 | Area | State |
 |------|-------|
@@ -153,7 +155,7 @@ What remains is making the error responses consistent.
 | Request validation (`@NotBlank`, `@Size(2048)`, `@URL`) + `GlobalExceptionHandler` | Done |
 | `POST /api/v1/links` — create a short link | Done |
 | `GET /{alias}` — redirect, with `404` / `400` / `500` error cases | Done |
-| One consistent JSON shape for all error responses | Next |
+| One consistent error shape for all error responses (RFC 9457, `application/problem+json`) | Done |
 
 Current progress and the next planned increment are tracked in
 [`docs/ROADMAP.md`](./docs/ROADMAP.md).
