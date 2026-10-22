@@ -7,3 +7,12 @@ spring:
 
   liquibase:
     change-log: classpath:/db/changelog-master.yaml
+
+management:
+  endpoints:
+    web:
+      # Only /actuator/health is exposed over HTTP (Spring Boot's default). The discovery page
+      # at /actuator is turned off: it is a single path segment, so it would take that path away
+      # from the redirect route "/{alias}" (D5).
+      discovery:
+        enabled: false

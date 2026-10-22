@@ -202,21 +202,37 @@ Reflects the actual state of the code as of the date above.
   - `UrlShortenerControllerTest` asserts content type, `status`, `title` and `detail` on every error
     case, and that `validation` is absent on non-validation errors.
   - Full suite: **41 tests green.**
+- **Health check — green.** `spring-boot-starter-actuator` added; `GET /actuator/health` returns
+  **200** `{ "status": "UP", "groups": ["liveness", "readiness"] }`, or **503** `DOWN` when a check
+  fails. The contract is in [DESIGN.md](./DESIGN.md) under "3. Health check".
+  - No code of our own — Actuator provides the endpoint. The only setting added turns off its
+    index page at `/actuator`, which would otherwise take that path away from `/{alias}`
+    ([D5](./DECISIONS.md)).
+  - `HealthCheckTest` (Testcontainers, real HTTP server) pins three things:
+    - **The body is exactly the JSON above** (strict comparison), so no internal detail — which
+      checks ran, the database product — can start leaking from a public endpoint unnoticed.
+    - **The database check is included and `UP`.** Asked of the endpoint directly, since the HTTP
+      body hides it. This is what makes `UP` mean "can reach Postgres", not just "the JVM is
+      running".
+    - **`GET /actuator` returns the redirect's 404.** Seen failing with 200 when Actuator was
+      added without the setting.
+  - Not tested: the 503 path. It needs the database to go away mid-test, which would disturb the
+    Postgres container the other test classes share. Spring Boot's own behaviour (any `DOWN` check
+    makes the whole response `DOWN`/503) is relied on.
+  - Full suite: **44 tests green.**
 
 ### In progress / partial
 - _Nothing in progress._
 
 ### Next (immediate)
 
-The build order is complete, but v1 is not: the two operational basics in the v1 scope are
-still missing. Load testing comes after them, and **before** Analytics (F5) — F5 adds work to
+The build order is complete, but v1 is not: structured logging, one of the two operational
+basics in the v1 scope, is still missing. Load testing comes after them, and **before** Analytics (F5) — F5 adds work to
 the redirect path, and its cost can only be measured against a baseline taken without it
 ([D13](./DECISIONS.md) names F5 as the first change worth measuring).
 
 1. **Finish v1** — each one test-first, each its own PR:
-   - **Health check** — add `spring-boot-starter-actuator` and expose `/actuator/health`,
-     including the database check. A load test needs it to know the app is ready before load
-     starts; any deployment needs it for the same reason.
+   - ~~**Health check**~~ — ✅ **done** (see Done above).
    - **Structured logging** — JSON log output, so a failed load test can be investigated.
    - **Keep debug logging out of the default config.** SQL and parameter logging
      (`org.hibernate.SQL`, `org.hibernate.orm.jdbc.bind`) and Hibernate statistics belong in a
