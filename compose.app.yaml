@@ -28,3 +28,5 @@ services:
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:?set it in .env — copy .env.example}'
       - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:?set it in .env — copy .env.example}'
       - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:?set it in .env — copy .env.example}'
+      # Layers application-local.yaml (SQL logging) on top of application.yaml.
+      - 'SPRING_PROFILES_ACTIVE=local'
