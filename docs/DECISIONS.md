@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-23_
 
 ---
 
@@ -48,7 +48,7 @@ Testcontainers, which spin up a real throwaway Postgres and apply Liquibase at c
 startup. We do **not** run the app + Postman as the primary loop.
 
 - **Why:** fast, reproducible, deterministic feedback; the migration is exercised on every
-  integration test run. See [WORKFLOW.md](./WORKFLOW.md) for the full three-layer workflow.
+  integration test run. See [WORKFLOW.md](./WORKFLOW.md#the-three-layers) for the full three-layer workflow.
 - **Trade-off / correction:** rebuilding a Docker *image* per change just to poke endpoints
   is a slow loop for **backend** devs, so it's not their inner loop. (It's the right tool for
   *frontend* devs though — see D8.) Also note Liquibase runs at app **startup**, not at image
@@ -179,7 +179,7 @@ already had (column + `UQ_URL_ALIAS`).
     Reading the sequence explicitly makes the dependency legible in three lines and removes a class
     of subtle failure where a lifecycle detail changes and the alias silently encodes the wrong
     number. The same `SEQ_URL_ALIAS`, the same single INSERT — only *who calls `nextval`* changed.
-  - **It also keeps R7's retry honest.** [R7](#r7--custom-alias-can-squat-a-generated-code)'s first
+  - **It also keeps R7's retry honest.** [R7](#r7)'s first
     trap is that "advance to the next id" must be `nextval`, never `id + 1`. With the call already
     in our own code, the retry is a second `getNextId()` — the correct move is the obvious one, not
     a thing to remember.
@@ -195,7 +195,7 @@ already had (column + `UQ_URL_ALIAS`).
     look existing, so `save()` routes to `merge()`, which checks the row's existence first. That's
     a *second* extra round-trip, and unlike cost 1 it buys nothing. Fixable by having `UrlAlias`
     implement `Persistable<Long>` (or calling `EntityManager.persist` directly). **Flagged, not yet
-    applied** — see [R9](#r9--save-on-a-manually-assigned-id-issues-a-redundant-select).
+    applied** — see [R9](#r9).
   - **Cost 3 — Liquibase and the entity are the only guard.** With no id generator, nothing in the
     mapping references `SEQ_URL_ALIAS`; the string lives in a query. A rename in a migration breaks
     at runtime, not at startup. Covered by `UrlShortenerServiceTest` running against a real
@@ -204,14 +204,14 @@ already had (column + `UQ_URL_ALIAS`).
 - **Trade-offs (accepted):**
   - Reintroduces the `URL_ALIAS` column + `UQ_URL_ALIAS` index (storage + a secondary index).
   - Redirect is now an index lookup on a `VARCHAR` rather than a PK lookup on `BIGINT` — still
-    O(log n), negligible at our scale (see [WORKFLOW.md](./WORKFLOW.md) on the redirect hot path).
+    O(log n).
   - Generation needs **unique-violation retry**: `encode(id)` never collides with another
     *generated* alias (bijection over ids), but it *can* collide with an existing *custom* alias —
     catch the violation and advance to the next id.
     > ⚠️ This retry can **cascade** into a run of consecutive failures (and is a deliberate
     > squatting/DoS vector), and "advance to the next id" hides a `nextval`-vs-`id + 1` trap.
     > Worked example, analysis, and mitigations in [SCENARIO.md](./SCENARIO.md); tracked as
-    > **[R7](#r7--custom-alias-can-squat-a-generated-code)**.
+    > **[R7](#r7)**.
 
 - **Scope note:** this is a **storage/schema** decision made now to avoid a v2 migration; it does
   **not** pull F4 into the MVP. The MVP still ships generated-only (F1–F3); we simply build it on
@@ -223,7 +223,7 @@ already had (column + `UQ_URL_ALIAS`).
 ### D11 — Partition the custom/generated namespace by character class
 Custom and generated aliases share the one `URL_ALIAS` column (D10), but we constrain the two
 **value sets to be provably disjoint** so a generated `encode(id)` can *never* equal a stored
-custom slug. This dissolves [R7](#r7--custom-alias-can-squat-a-generated-code): the
+custom slug. This dissolves [R7](#r7): the
 unique-violation retry, its cascade, and the squatting/DoS vector all disappear because the
 collision becomes **structurally impossible**, not merely handled. Full analysis in
 [SCENARIO.md](./SCENARIO.md).
@@ -236,7 +236,7 @@ collision becomes **structurally impossible**, not merely handled. Full analysis
 
 - **Custom-slug validation rules (F4):**
   1. Charset `[0-9a-zA-Z_-]`, length **3–64** (column widens to `VARCHAR(64)` — see
-     [R3](#r3--url_alias-column-width--resolved--️-moot-d9--️-back-in-play-d10--resolved-varchar64) —
+     [R3](#r3) —
      **already applied**, the column is `VARCHAR(64)` today).
   2. **Must contain at least one `-` or `_`** — this is what forces the slug out of the generated
      set and guarantees disjointness.
@@ -287,7 +287,7 @@ the single source of truth; `.env.example` is the committed template.
   `docker compose up` with a readable message instead of silently starting a
   half-configured database. **Trade-off (accepted):** the frontend-dev onboarding path (D8)
   gains a mandatory `cp .env.example .env` step — documented in
-  [WORKFLOW.md](./WORKFLOW.md). The alternative (`${VAR:-default}`) would have preserved
+  [WORKFLOW.md](./WORKFLOW.md#local-credentials). The alternative (`${VAR:-default}`) would have preserved
   zero-setup clone-and-run but kept the values in git, defeating the point.
 
 - **Unaffected:** `./mvnw test` — Testcontainers generates its own random per-run credentials
@@ -370,7 +370,7 @@ permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the li
 
 - **Why `minLength = 7`.** With no minimum, `encode(1)` is a two-character code: it reads as a
   toy and makes early enumeration trivial. Seven gives uniform-width codes regardless of id size
-  and matches the `aB3kZ9q` example already in [DESIGN.md](./DESIGN.md), so the contract doc and
+  and matches the `aB3kZ9q` example already in [DESIGN.md](./DESIGN.md#1-create-a-short-link), so the contract doc and
   the code agree without extra effort. 62⁷ ≈ 3.5 × 10¹² makes blind guessing tedious.
 
 - **Why the default blocklist stays on.** Sqids ships a profanity list and transparently picks a
@@ -381,7 +381,7 @@ permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the li
 - **Why constants rather than configuration.** Three reasons, in order of weight:
   1. A configurable alphabet could be set — via a property or environment variable, outside code
      review — to a value containing `-` or `_`, silently breaking D11's partition and reopening
-     [R7](#r7--custom-alias-can-squat-a-generated-code). As a constant it cannot change without a
+     [R7](#r7). As a constant it cannot change without a
      diff, and the D11 test guards it.
   2. Every environment should mint the same shape of code. Configuration invites dev and prod to
      drift apart for no benefit (harmless under D10, but confusing).
@@ -391,7 +391,7 @@ permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the li
   deployment had to mint several distinct code shapes. Neither is on the roadmap.
 
 - **Honest trade-off — the ids are guessable, and they count.** Ids come from a sequence, so they
-  are consecutive. Two distinct consequences, tracked as [R8](#r8--sequential-ids-leak-the-link-count-and-allow-enumeration):
+  are consecutive. Two distinct consequences, tracked as [R8](#r8):
   - **Enumeration.** Anyone who recovers the alphabet — and
     [D1](#d1--short-codes-via-sqids-over-a-db-sequence) concedes it is recoverable, since Sqids is
     obfuscation, not encryption — can walk the range and retrieve every link ever created.
@@ -449,8 +449,8 @@ static `UrlAliasMapper.toShortLink(entity)` in `dev.azhar.url_shortener.mapper`.
   a caller actually needs it to.
 
 - **Deliberately narrower than the entity.** No `id`: it is a persistence detail, and it is exactly
-  the value [R8](#r8--sequential-ids-leak-the-link-count-and-allow-enumeration) says not to spread
-  around. No `createdAt`: it isn't in the [DESIGN.md](./DESIGN.md) contract. Add either when
+  the value [R8](#r8) says not to spread
+  around. No `createdAt`: it isn't in the [DESIGN.md](./DESIGN.md#1-create-a-short-link) contract. Add either when
   something needs it, not in advance.
 
 - **Why the mapper is its own class.** A factory method on `ShortLink` would put a JPA import in the
@@ -489,7 +489,7 @@ built through the three-arg constructor `(id, longUrl, urlAlias)` and not mutate
 
 - **Trade-off — updates now need an explicit method.** With no setters there is nothing to mutate,
   so dirty checking has no way to update a row. v1 never updates one (create and read only), but
-  [F6](./ROADMAP.md) (expiry/delete) will need a named, intention-revealing method on the entity
+  [F6](./ROADMAP.md#features--user-stories) (expiry/delete) will need a named, intention-revealing method on the entity
   (`expire()`, say) rather than a setter. That is the better shape anyway: it names the state
   transition instead of exposing the field.
 
@@ -498,19 +498,85 @@ built through the three-arg constructor `(id, longUrl, urlAlias)` and not mutate
 
 ---
 
+### D17 — Structured logging: ECS JSON, domain events through a probe, no long URLs
+
+Log output is **JSON in the Elastic Common Schema (ECS) format**, using Spring Boot's built-in
+structured logging (`logging.structured.format.console`). Application code does not call the logger
+directly for domain events; it reports them to a single **domain probe**, which turns each one into a
+log line. Every line written while handling a request carries a **request id**.
+
+- **Why JSON.** One named field per piece of information, so a failed request can be found by
+  filtering on fields (`log.level`, an alias, a request id) instead of searching free text. JSON
+  encoding also escapes newlines, so a value can't forge an extra log line.
+
+- **Why ECS over Logstash format.** Both are built in, so neither needs a dependency. ECS is a
+  published, versioned schema with documented field names (`@timestamp`, `log.level`,
+  `service.name`, `error.stack_trace`); the Logstash format is one tool's convention. Choosing a
+  documented schema means the field names don't have to be invented, and the log contract in
+  [DESIGN.md](./DESIGN.md) can point at it. Not chosen: `logstash-logback-encoder`, a separate
+  library that did this job before Spring Boot 3.4 and is now an unnecessary dependency.
+
+- **Where JSON is on.** JSON is the **default**, so the Docker image, the load tests and the test
+  suite all produce it. The `local` profile switches the console back to plain text, which is easier
+  to read while developing. Tests run the default, so they exercise the format that ships.
+
+- **What is logged — domain events only, via the probe.** The probe has one method per event,
+  named in the domain's language (Hodgson, *Domain-Oriented Observability*, martinfowler.com, 2019):
+
+  | Event | Level | Why this level |
+  |-------|-------|----------------|
+  | Link created | `INFO` | Create is the cold path; one line per create is cheap. |
+  | Alias not found (404) | `INFO` | Expected client behaviour, not a fault of ours. A spike is still visible by counting these lines ([R8](#r8) enumeration). |
+  | Alias too long (400) | `INFO` | As above. |
+  | Broken link (500) | `ERROR` | A stored row we can't serve — our fault, needs attention. |
+
+  - **Successful redirects are not logged.** Redirect is the hot path
+    ([D13](#d13--no-local-performance-testing-the-local-check-is-the-query-plan)); a line per
+    redirect would cost I/O on every request and make a load test partly measure the logger.
+    Successful-redirect volume belongs to metrics, which can be added to the same probe later
+    without touching the service.
+  - **Why a probe rather than `log.*` calls.** The service and controller say *what happened*; the
+    probe decides *how it is recorded*. That makes the events testable as method calls (no parsing
+    of console output in service tests), and gives metrics one place to attach.
+  - **Limits.** One probe, and only for the events above. Not one call per method, not entry/exit
+    tracing. Framework logging (Spring, Hibernate, Liquibase) is untouched and still appears, as
+    JSON.
+
+- **What is never logged.**
+  - **The long URL**, in any form — message, field, or exception message. Query strings can carry
+    tokens or personal data, and the alias is enough to find the row. See
+    [R10](#r10) for where this is already violated.
+  - **The request body.**
+  - **An over-long alias itself.** Log its length; the value is untrusted and unbounded.
+
+- **Request id.** A servlet filter generates an id when a request arrives, puts it in the MDC
+  (Mapped Diagnostic Context — a per-thread map the logger adds to every line), and removes it when
+  the request finishes, so it can't leak into the next request served by the same thread. Intended
+  field: ECS's `http.request.id`; the exact key is confirmed by the test that introduces it.
+  - **Not returned in a response header.** It would be an addition to the API contract for a
+    benefit (clients quoting the id in bug reports) nobody needs yet.
+  - **Not read from an incoming header either.** The id is always generated server-side, so a
+    client can't choose or collide it.
+
+- **Revisit when:** metrics are added (they belong on the probe, not in a second mechanism); or
+  logs need correlating across more than one service, at which point distributed tracing
+  (Micrometer Tracing / OpenTelemetry trace ids) replaces the home-made request id.
+
+---
+
 ## Open risks / things to fix
 
 > Issues surfaced early. R1–R4, R6 and R9 resolved; R5 remains; R7 opened by D10, fix decided in
-> D11 (pending F4); R8 opened by D14, accepted for v1.
+> D11 (pending F4); R8 opened by D14, accepted for v1; R10 opened by D17.
 
-### R1 — Migration is disabled ✅ RESOLVED
+### <a id="r1"></a>R1 — Migration is disabled ✅ RESOLVED
 The `001_create_url_alias_table` include in `changelog-master.yaml` is enabled; the changeset
 now applies (verified in tests and in the container).
 
-### R2 — SQL bugs in `001_create_url_alias_table.sql` ✅ RESOLVED
+### <a id="r2"></a>R2 — SQL bugs in `001_create_url_alias_table.sql` ✅ RESOLVED
 Fixed: `TIMESTAMPZ`→`TIMESTAMPTZ`, and the missing comma between the `PK_`/`UQ_` constraints.
 
-### R3 — `URL_ALIAS` column width ✅ RESOLVED → ⛔️ MOOT (D9) → ♻️ BACK IN PLAY (D10) → ✅ RESOLVED (`VARCHAR(64)`)
+### <a id="r3"></a>R3 — `URL_ALIAS` column width ✅ RESOLVED → ⛔️ MOOT (D9) → ♻️ BACK IN PLAY (D10) → ✅ RESOLVED (`VARCHAR(64)`)
 Widened `VARCHAR(7)`→`VARCHAR(12)`→**`VARCHAR(64)`**. Note: the column width is a *ceiling*, not
 the code length — Postgres `VARCHAR(n)` doesn't pad, so an unused ceiling costs nothing. Actual
 code length is set by Sqids (and an optional `minLength` we'll choose when wiring it up); 12 chars
@@ -526,25 +592,25 @@ duplication.
 > `VARCHAR(64)` column. Inert at runtime (Liquibase owns the schema, not `ddl-auto`) but misleading;
 > the annotation now reads `length = 64` and matches.
 
-### R4 — Controller doesn't match the contract yet ✅ RESOLVED
+### <a id="r4"></a>R4 — Controller doesn't match the contract yet ✅ RESOLVED
 `POST /create` echoes the URL; needs to become `POST /api/v1/links` returning the
-documented response (see [DESIGN.md](./DESIGN.md)). Tests reference `/create` and assert
+documented response (see [DESIGN.md](./DESIGN.md#1-create-a-short-link)). Tests reference `/create` and assert
 200 on success — both will change when the real endpoint lands.
 > ✅ **Resolved in build-order step 3c:** `POST /api/v1/links` returns 201 with the documented
 > body, and the tests assert it. `POST /create` is gone.
 
-### R5 — `@URL` accepts `ftp:`/`file:` schemes
+### <a id="r5"></a>R5 — `@URL` accepts `ftp:`/`file:` schemes
 The existing test treats `ftp://example` and `file:some-file` as valid. If we want to
 restrict to `http`/`https`, we'll need explicit scheme validation. Flagging; not urgent.
 
-### R6 — Code predates D9 (still stores the alias) ✅ RESOLVED (D10)
+### <a id="r6"></a>R6 — Code predates D9 (still stores the alias) ✅ RESOLVED (D10)
 The entity (`UrlAlias.urlAlias`), repository (`findByUrlAlias`), and migration
 (`URL_ALIAS VARCHAR(12)` + `UQ_URL_ALIAS`) model a **stored** alias. Under
 [D10](#d10--store-the-alias-reverses-d9) that is exactly what we want — the code no longer
 diverges, so no realignment is needed. Remaining Step-2 work is unchanged by this: the
 persistence test (D6), and the optional `UrlAlias` → `ShortenedUrl` rename (style, TBD).
 
-### R7 — Custom alias can squat a generated code ⚠️ OPEN (F4 / v2) → 🛠️ FIX DECIDED ([D11](#d11--partition-the-customgenerated-namespace-by-character-class))
+### <a id="r7"></a>R7 — Custom alias can squat a generated code ⚠️ OPEN (F4 / v2) → 🛠️ FIX DECIDED ([D11](#d11--partition-the-customgenerated-namespace-by-character-class))
 D10 puts generated and custom aliases in one `URL_ALIAS` column, so a custom alias can occupy a
 string the generator will later mint. The unique constraint catches it, but the **retry can
 cascade** across a run of consecutive ids, and — because Sqids is reversible (D1) — an attacker
@@ -560,7 +626,7 @@ tx/savepoint + a bound).
   customs exist).
 - Full worked example, analysis, and options: [SCENARIO.md](./SCENARIO.md).
 
-### R8 — Sequential ids leak the link count and allow enumeration ⚠️ OPEN → ✅ ACCEPTED for v1 ([D14](#d14--sqids-alphabet-and-minlength))
+### <a id="r8"></a>R8 — Sequential ids leak the link count and allow enumeration ⚠️ OPEN → ✅ ACCEPTED for v1 ([D14](#d14--sqids-alphabet-and-minlength))
 Aliases are derived from a consecutive sequence, so they are predictable: the whole link set can
 be walked, and — because Sqids is reversible (D1) — **one** created link decodes to the current
 sequence value, disclosing the total row count in a single request. Reasoning, the
@@ -582,7 +648,7 @@ keeps D1's collision-free property) are in
 - **Explicitly not the fix:** rate limiting. It raises the cost of a slow walk but does nothing
   about the one-request count disclosure, and it is out of scope by prior decision.
 
-### R9 — `save()` on a manually-assigned id issues a redundant SELECT ⚠️ OPEN (low priority) → ✅ RESOLVED
+### <a id="r9"></a>R9 — `save()` on a manually-assigned id issues a redundant SELECT ⚠️ OPEN (low priority) → ✅ RESOLVED
 Under [D10](#d10--store-the-alias-reverses-d9)'s explicit-`nextval` approach, `UrlAlias.id` is set
 before `urlAliasRepository.save(...)`. Spring Data's `SimpleJpaRepository.save` decides new-vs-existing
 with `id == null`, so a pre-set id makes the entity look **existing** and the call routes to
@@ -602,3 +668,16 @@ there, so every create runs a `SELECT` that can only ever miss, then the `INSERT
 
 > ✅ **Resolved:** `UrlShortenerService.createShortLink` now calls `entityManager.persist(...)`
 > instead of `save(...)`, so create is a single `INSERT`. Not pinned by a statement-count test.
+
+### <a id="r10"></a>R10 — Broken-link log line contains the long URL ⚠️ OPEN
+`GlobalExceptionHandler.handleBrokenLink` logs `BrokenLinkException` with its stack trace. That
+exception wraps the `IllegalArgumentException` from `URI.create(longUrl)`, whose message quotes the
+input — so the full stored URL is written to the log, in breach of
+[D17](#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls)'s "never log the
+long URL". `BrokenLinkException(Throwable cause)` makes it worse: `super(cause)` copies the cause's
+message into its own, so the URL appears twice.
+
+- **Fix:** when the broken-link event moves into the domain probe, log the alias and the exception
+  *type*, not the cause's message or stack trace — or wrap it so the URL is never in the message.
+- **Pin it with a test:** feed an unparseable stored URL and assert the captured log output does not
+  contain it.
