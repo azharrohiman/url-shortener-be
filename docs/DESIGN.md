@@ -3,7 +3,7 @@
 > The agreed contract. Code should conform to this; where current code diverges it's
 > noted in [ROADMAP.md](./ROADMAP.md) and [DECISIONS.md](./DECISIONS.md).
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-23_
 
 ---
 
@@ -86,11 +86,11 @@ The body is fixed and doesn't echo the stored URL:
 }
 ```
 
-The alias is **stored** in the `URL_ALIAS` column (see [DECISIONS.md](./DECISIONS.md) D10), so
+The alias is **stored** in the `URL_ALIAS` column (see [DECISIONS.md](./DECISIONS.md#d10--store-the-alias-reverses-d9) D10), so
 resolution is a single indexed lookup: `findByUrlAlias(alias)` → **302** to `LONG_URL`, else **404**.
 No decode/re-encode guard is needed — that was only required by the derived-alias model (D9).
 
-302 (not 301) is intentional — see [DECISIONS.md](./DECISIONS.md) D2.
+302 (not 301) is intentional — see [DECISIONS.md](./DECISIONS.md#d2--redirect-with-http-302-not-301) D2.
 
 ### 3. Health check
 
@@ -158,7 +158,7 @@ Single table. Nothing to normalise yet; analytics (v2) would add a separate
 
 > The alias is **stored** (D10). Generated aliases are `encode(id)`; custom aliases (F4, v2) will
 > live in this **same column** under the unique index. The column is `VARCHAR(64)` — sized ahead
-> for F4's custom slugs (max length 64 per [DECISIONS.md](./DECISIONS.md) D11) so custom aliases
+> for F4's custom slugs (max length 64 per [DECISIONS.md](./DECISIONS.md#d11--partition-the-customgenerated-namespace-by-character-class) D11) so custom aliases
 > land without a migration. Generated codes use only a fraction of that width; `VARCHAR(n)` in
 > Postgres doesn't pad, so the extra ceiling costs nothing. See R3.
 
@@ -191,7 +191,7 @@ The service reads `nextval` explicitly, encodes, and writes id + alias in the sa
 ## Layers & types
 
 Three types describe the same link, one per boundary. Each stops where the next begins — see
-[DECISIONS.md](./DECISIONS.md) D15.
+[DECISIONS.md](./DECISIONS.md#d15--the-service-returns-a-domain-record-never-the-entity) D15.
 
 | Layer | Type | Package | Purpose |
 |-------|------|---------|---------|

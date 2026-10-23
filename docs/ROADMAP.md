@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-23_
 
 ---
 
@@ -20,7 +20,7 @@ completeness, and we build in small, independently testable increments.
 ### MVP (v1) — locked
 
 - **Audience:** public + anonymous. No accounts, no auth.
-- **Codes:** auto-generated, non-sequential (Sqids over a DB sequence — see [DECISIONS.md](./DECISIONS.md)).
+- **Codes:** auto-generated, non-sequential (Sqids over a DB sequence — see [DECISIONS.md](./DECISIONS.md#d1--short-codes-via-sqids-over-a-db-sequence)).
 - **Two capabilities only:**
   1. Create a short link from a long URL.
   2. Redirect a short code to its original URL (HTTP 302).
@@ -59,9 +59,9 @@ Each step is small enough to complete and test on its own.
 
 1. **Migration applies, verified by an integration test** — a Testcontainers-backed
    `@SpringBootTest` boots the context, Liquibase runs, and the test asserts `TB_URL_ALIAS`
-   exists. No manual app run. (TDD: see it red, then green — see [WORKFLOW.md](./WORKFLOW.md).)
+   exists. No manual app run. (TDD: see it red, then green — see [WORKFLOW.md](./WORKFLOW.md#1-inner-loop--automated-tests-95-of-development).)
 2. **`TB_URL_ALIAS` table live** — enable the changeset; entity + repository in place.
-   Per [D10](./DECISIONS.md), the alias is **stored** in `URL_ALIAS` (unique index); lookups use it.
+   Per [D10](./DECISIONS.md#d10--store-the-alias-reverses-d9), the alias is **stored** in `URL_ALIAS` (unique index); lookups use it.
 3. **Create endpoint** — `POST /api/v1/links` computes `encode(id)` (id from the sequence, before
    insert) and persists `id` + `LONG_URL` + `URL_ALIAS` in one INSERT; returns the alias.
 4. **Redirect endpoint** — `GET /{alias}` does `findByUrlAlias` → 302 to the long URL, 404 if unknown.
@@ -79,14 +79,14 @@ Reflects the actual state of the code as of the date above.
 - Request DTO `CreateUrlAliasRequestDto` with `@NotBlank` / `@Size(2048)` / `@URL` validation.
 - `GlobalExceptionHandler` mapping validation failures → 400 with field-error JSON.
 - Controller test covering valid / blank / invalid / oversized URL cases.
-- **TDD/Testcontainers workflow** established + documented ([WORKFLOW.md](./WORKFLOW.md)).
+- **TDD/Testcontainers workflow** established + documented ([WORKFLOW.md](./WORKFLOW.md#the-three-layers)).
 - **Build-order step 1 (migration applies) — green.** Changeset enabled and fixed
-  (`TIMESTAMPTZ`, commas, `URL_ALIAS` widened to `VARCHAR(64)` — see [R3](./DECISIONS.md));
+  (`TIMESTAMPTZ`, commas, `URL_ALIAS` widened to `VARCHAR(64)` — see [R3](./DECISIONS.md#r3));
   `UrlShortenerApplicationTests` boots a Testcontainers Postgres, applies Liquibase, and asserts
   `TB_URL_ALIAS` exists. 2 tests pass.
 - **Containerised backend** for frontend devs: multi-stage `Dockerfile` + `compose.app.yaml`.
   Verified: `docker compose -f compose.app.yaml up --build` boots DB + app, migration runs,
-  API answers on `localhost:8080`. (See [DECISIONS.md](./DECISIONS.md) D8.)
+  API answers on `localhost:8080`. (See [DECISIONS.md](./DECISIONS.md#d8--containerise-the-backend-for-the-frontend-dev-workflow) D8.)
 - **Build-order step 2 (`TB_URL_ALIAS` live) — green.** Entity + repository in place and proven
   by `UrlAliasRepositoryTest` (7 tests, Testcontainers, no `@Transactional` so every assertion is
   against committed data):
@@ -104,10 +104,10 @@ Reflects the actual state of the code as of the date above.
 - **Step 3a (alias generator) — green.** Sqids added to `pom.xml` (pinned via a `sqids.version`
   property — the version is part of the URL contract, so it's explicit and visible). `AliasGenerator`
   wraps it: `encode(id) → String`, one shared immutable `Sqids` instance, alphabet and `minLength`
-  as package-private constants per [D14](./DECISIONS.md). `AliasGeneratorTest` is a plain unit test —
+  as package-private constants per [D14](./DECISIONS.md#d14--sqids-alphabet-and-minlength). `AliasGeneratorTest` is a plain unit test —
   no Spring, no Docker, sub-second:
   - **Generated aliases are alphanumeric only, no `-`/`_`** — parameterised over ids up to
-    `Long.MAX_VALUE`. This pins [D11](./DECISIONS.md)'s permanent invariant with a test rather than
+    `Long.MAX_VALUE`. This pins [D11](./DECISIONS.md#d11--partition-the-customgenerated-namespace-by-character-class)'s permanent invariant with a test rather than
     good intentions, so an alphabet change can't silently break F4's namespace partition.
   - The alphabet constant is 62 alphanumeric characters. Distinctness is covered indirectly —
     Sqids' builder rejects duplicates, so 62 + no-duplicates + alphanumeric can only be a
@@ -132,8 +132,8 @@ Reflects the actual state of the code as of the date above.
     *defensive* guard: `@Valid` on the DTO is the real barrier for HTTP callers (3c).
 - **Entity no longer leaves the service — green.** `createShortLink` returns the `ShortLink` record
   (`model` package) instead of the `UrlAlias` entity, mapped by static `UrlAliasMapper.toShortLink`
-  (`mapper` package). See [D15](./DECISIONS.md) for why, and the layer table in
-  [DESIGN.md](./DESIGN.md) for the three types and where each stops.
+  (`mapper` package). See [D15](./DECISIONS.md#d15--the-service-returns-a-domain-record-never-the-entity) for why, and the layer table in
+  [DESIGN.md](./DESIGN.md#layers--types) for the three types and where each stops.
   - `UrlAliasMapperTest` is a plain unit test — no Spring, no Docker.
   - `UrlShortenerServiceTest` now also asserts the returned `ShortLink`s carry exactly the aliases
     that were persisted, so the service can't return something other than what it wrote. Its
@@ -143,7 +143,7 @@ Reflects the actual state of the code as of the date above.
     it and pass. Full suite: **28 tests green.**
 - **Entity is construct-once — green.** `UrlAlias` drops `@Setter`; `@NoArgsConstructor` is narrowed
   to `AccessLevel.PROTECTED` (Hibernate needs it to read rows back — see
-  [D16](./DECISIONS.md)). The service builds the row in one three-arg constructor call instead of a
+  [D16](./DECISIONS.md#d16--the-entity-is-construct-once-no-setters-protected-no-arg-constructor)). The service builds the row in one three-arg constructor call instead of a
   no-arg constructor plus three setters, so a half-populated entity no longer compiles. All tests
   already used the three-arg constructor; `UrlAliasRepositoryTest` is the regression net, since it
   reads entities back out of Postgres. Suite still **28 green**.
@@ -155,7 +155,7 @@ Reflects the actual state of the code as of the date above.
 - **Step 4a (service) — green.** `UrlShortenerService.getLongUrl(alias)` calls `findByUrlAlias` and
   returns the long URL as a `String`, or throws `UrlNotFoundException` (new, unchecked, `exception`
   package). Named `getLongUrl` rather than the `findByUrlAlias` this board planned: it returns the URL,
-  not the row, and the entity still stays in the service ([D15](./DECISIONS.md)).
+  not the row, and the entity still stays in the service ([D15](./DECISIONS.md#d15--the-service-returns-a-domain-record-never-the-entity)).
   `UrlShortenerServiceTest` covers it with 3 new tests:
   - **Found:** two rows are seeded straight through the repository — not via `createShortLink`, so a
     bug there can't turn this test red — and the second alias is looked up. A lookup that ignored the
@@ -168,7 +168,7 @@ Reflects the actual state of the code as of the date above.
   - Full suite: **33 tests green.**
 - **Step 4b (controller) — green. Step 4 complete.** `GET /{alias}` calls `getLongUrl` and returns
   **302** with `Location: <longUrl>`. Exceptions become responses in `GlobalExceptionHandler`, which
-  settles the open question from 4a. The full contract, with bodies, is in [DESIGN.md](./DESIGN.md).
+  settles the open question from 4a. The full contract, with bodies, is in [DESIGN.md](./DESIGN.md#api-contract-mvp).
   - **404** — `UrlNotFoundException` → `{ "message": ... }`.
   - **400 for an over-long alias** — `getLongUrl` rejects an alias longer than `ALIAS_LENGTH_LIMIT`
     (64, the width of `URL_ALIAS`) with `AliasLengthLimitException` before querying. The service
@@ -189,7 +189,7 @@ Reflects the actual state of the code as of the date above.
   shapes: validation failures returned `{ "<field>": "<reason>" }`, and every other error returned
   `{ "message": "..." }`. Every error now returns one shape based on RFC 9457 — `status`, `title`,
   `detail`, plus a `validation` list on validation failures only — sent as
-  `application/problem+json`. The contract is in [DESIGN.md](./DESIGN.md) under "Error responses".
+  `application/problem+json`. The contract is in [DESIGN.md](./DESIGN.md#error-responses) under "Error responses".
   - `ErrorResponseDto` + `ValidationErrorDto` replace the three single-field `*ResponseDto`s, and
     every handler in `GlobalExceptionHandler` builds its response through one helper that sets the
     status and content type.
@@ -204,10 +204,10 @@ Reflects the actual state of the code as of the date above.
   - Full suite: **41 tests green.**
 - **Health check — green.** `spring-boot-starter-actuator` added; `GET /actuator/health` returns
   **200** `{ "status": "UP", "groups": ["liveness", "readiness"] }`, or **503** `DOWN` when a check
-  fails. The contract is in [DESIGN.md](./DESIGN.md) under "3. Health check".
+  fails. The contract is in [DESIGN.md](./DESIGN.md#3-health-check) under "3. Health check".
   - No code of our own — Actuator provides the endpoint. The only setting added turns off its
     index page at `/actuator`, which would otherwise take that path away from `/{alias}`
-    ([D5](./DECISIONS.md)).
+    ([D5](./DECISIONS.md#d5--two-route-namespaces)).
   - `HealthCheckTest` (Testcontainers, real HTTP server) pins three things:
     - **The body is exactly the JSON above** (strict comparison), so no internal detail — which
       checks ran, the database product — can start leaking from a public endpoint unnoticed.
@@ -222,41 +222,45 @@ Reflects the actual state of the code as of the date above.
   - Full suite: **44 tests green.**
 
 ### In progress / partial
-- _Nothing in progress._
+- **Structured logging** — JSON log output, so a failed load test can be investigated. The last
+  operational basic in the v1 scope. Decisions in [D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls); each step is test-first
+  and its own PR:
+  0. ✅ **Decide and record** — [D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls) (ECS JSON, domain probe, request id, what
+     is never logged) and [R10](./DECISIONS.md#r10) (the broken-link log line leaks the long URL).
+  1. **JSON output** — config only: ECS on the console by default, plain text in the `local`
+     profile. A test asserts a captured log line parses as JSON with the expected ECS fields.
+  2. **Request id** — a filter puts a generated id in the MDC for every request and removes it
+     afterwards. Tests: lines from one request share the id; it doesn't carry into the next.
+  3. **Domain probe, first event: link created** — introduce the probe and call it from create.
+  4. **Probe events for failed redirects** — not found, alias too long, broken link. Fixes R10.
+  5. **Docs** — the log field contract in [DESIGN.md](./DESIGN.md), plain vs. JSON logs in
+     [WORKFLOW.md](./WORKFLOW.md).
 
 ### Next (immediate)
 
-The build order is complete, but v1 is not: structured logging, one of the two operational
-basics in the v1 scope, is still missing. Load testing comes after them, and **before** Analytics (F5) — F5 adds work to
-the redirect path, and its cost can only be measured against a baseline taken without it
-([D13](./DECISIONS.md) names F5 as the first change worth measuring).
+The build order is complete; v1 finishes with structured logging (in progress above). Load
+testing comes after it, and **before** Analytics (F5) — F5 adds work to the redirect path, and its
+cost can only be measured against a baseline taken without it ([D13](./DECISIONS.md#d13--no-local-performance-testing-the-local-check-is-the-query-plan) names F5 as
+the first change worth measuring).
 
-1. **Finish v1** — each one test-first, each its own PR:
-   - ~~**Health check**~~ — ✅ **done** (see Done above).
-   - **Structured logging** — JSON log output, so a failed load test can be investigated.
-   - **Keep debug logging out of the default config.** SQL and parameter logging
-     (`org.hibernate.SQL`, `org.hibernate.orm.jdbc.bind`) and Hibernate statistics belong in a
-     `local` profile, switched on with `SPRING_PROFILES_ACTIVE=local`. Left on by default, they
-     write several lines per request — a load test would measure the logger, not the app — and
-     they copy every submitted long URL into the logs.
-2. **Gatling script, run locally as a rehearsal only.** Proves the script works and the app
+1. **Gatling script, run locally as a rehearsal only.** Proves the script works and the app
    returns no errors when many requests arrive at once. The numbers are thrown away, never
    recorded — D13's point that laptop numbers mean nothing still stands. Record this as a new
    decision refining D13 before starting.
 
 Later steps, in order — detail to be planned when we reach them:
 
-3. **Performance environment** — see Backlog.
-4. **Baseline run** against realistic data (a few million rows). Record throughput (requests
+2. **Performance environment** — see Backlog.
+3. **Baseline run** against realistic data (a few million rows). Record throughput (requests
    per second) and p99 latency (the response time 99 in 100 requests beat).
-5. **F5 (Analytics)**, then re-run the same test and compare against the baseline.
+4. **F5 (Analytics)**, then re-run the same test and compare against the baseline.
 
 ### Deferred / low priority
-- ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md) makes the point
+- ~~**`UrlAlias` → `ShortenedUrl` rename**~~ — **dropped.** [D15](./DECISIONS.md#d15--the-service-returns-a-domain-record-never-the-entity) makes the point
   moot: the domain noun now exists as `ShortLink`, and the entity's job is to mirror `TB_URL_ALIAS`,
   so `UrlAlias` is the right name for it.
 - ~~**Redundant `SELECT` on create**~~ — ✅ **fixed** by switching to `EntityManager.persist`
-  (see Done above, and [R9](./DECISIONS.md)).
+  (see Done above, and [R9](./DECISIONS.md#r9)).
 - **Dead assertion in `UrlAliasRepositoryTest.given_findAll_...`** — it asserts the two saved ids
   differ by 1, but both are hardcoded (`1`, `2`) and the entity no longer has an id generator, so it
   can't fail. Either drop it or move a real sequence-step assertion into `UrlShortenerServiceTest`,
@@ -268,7 +272,7 @@ Later steps, in order — detail to be planned when we reach them:
 - **Performance environment** for load testing — a temporary cloud setup that is created,
   tested against, and deleted afterwards. Ground rules:
   - The **same Docker image** as everywhere else; only settings change, through environment
-    variables (as [D12](./DECISIONS.md) already does for credentials). `app.base-url` must be set
+    variables (as [D12](./DECISIONS.md#d12--local-credentials-via-env--direnv-never-committed) already does for credentials). `app.base-url` must be set
     per environment — it defaults to `http://localhost:8080`; the environment variable `APP_BASEURL` overrides it (Spring drops the dash when mapping
     property names to variable names).
   - **Gatling runs on a separate machine** from the app and database, so the two don't compete

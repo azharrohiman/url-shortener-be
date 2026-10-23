@@ -1,7 +1,7 @@
 # Scenario — the unique-violation retry cascade (D10)
 
 > A worked example stress-testing the **unique-violation retry** trade-off accepted in
-> [DECISIONS.md](./DECISIONS.md) D10. It shows that catching the collision and "advancing to
+> [DECISIONS.md](./DECISIONS.md#d10--store-the-alias-reverses-d9) D10. It shows that catching the collision and "advancing to
 > the next id" can cascade into a run of consecutive failures, examines how bad that really is
 > (accidental vs. deliberate), and lists mitigations.
 >
@@ -9,7 +9,7 @@
 > ships generated-only (F1–F3), so there are no custom aliases to collide with and this cannot
 > occur yet. Documented now because the storage decision (D10) is made now.
 
-_Last updated: 2026-08-18_
+_Last updated: 2026-10-23_
 
 ---
 

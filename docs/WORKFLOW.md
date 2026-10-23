@@ -3,7 +3,7 @@
 > How we build this project: **test-first (TDD)**, with the database provided by
 > containers. The app is *not* run-and-poke-in-Postman as the primary loop.
 
-_Last updated: 2026-07-31_
+_Last updated: 2026-10-23_
 
 ---
 
@@ -143,4 +143,4 @@ above). If the variables are empty, you probably haven't run `direnv allow`.
 Not done locally, and deliberately so — a laptop Postgres can't produce representative
 numbers. The local check that *is* meaningful is the query plan: `EXPLAIN ANALYZE` on the
 redirect lookup, confirming it uses `UQ_URL_ALIAS`. Full rationale and what real perf
-testing would require: [DECISIONS.md](./DECISIONS.md) D13.
+testing would require: [DECISIONS.md](./DECISIONS.md#d13--no-local-performance-testing-the-local-check-is-the-query-plan) D13.
