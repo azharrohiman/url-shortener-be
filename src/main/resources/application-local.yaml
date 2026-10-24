@@ -6,6 +6,11 @@ spring:
         generate_statistics: true
 
 logging:
+  structured:
+    format:
+      # Empty means plain text: easier to read while developing. Spring Boot only switches to
+      # JSON when this has a value (D17).
+      console: ""
   level:
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE

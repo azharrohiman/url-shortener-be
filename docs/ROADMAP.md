@@ -227,8 +227,17 @@ Reflects the actual state of the code as of the date above.
   and its own PR:
   0. ✅ **Decide and record** — [D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls) (ECS JSON, domain probe, request id, what
      is never logged) and [R10](./DECISIONS.md#r10) (the broken-link log line leaks the long URL).
-  1. **JSON output** — config only: ECS on the console by default, plain text in the `local`
-     profile. A test asserts a captured log line parses as JSON with the expected ECS fields.
+  1. ✅ **JSON output** — config only: `logging.structured.format.console: ecs` in
+     `application.yaml`, overridden to `""` in `application-local.yaml` (Spring Boot switches to
+     JSON only when the value is non-empty). `StructuredLoggingTest`:
+     - Captures a real log line and asserts it parses as JSON with `message`, `log.level`,
+       `log.logger`, `service.name` (`url-shortener`, from `spring.application.name`),
+       `@timestamp` and `ecs.version`. ECS names are nested objects in the output:
+       `{"log": {"level": ...}}`.
+     - Checks the `local` profile by resolving its config files, not by starting the app.
+       Starting a second application would reconfigure logging for the whole JVM, and every
+       cached context after it would log plain text.
+     - Full suite: **46 tests green.**
   2. **Request id** — a filter puts a generated id in the MDC for every request and removes it
      afterwards. Tests: lines from one request share the id; it doesn't carry into the next.
   3. **Domain probe, first event: link created** — introduce the probe and call it from create.
