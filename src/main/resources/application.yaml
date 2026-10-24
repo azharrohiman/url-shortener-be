@@ -16,3 +16,10 @@ management:
       # from the redirect route "/{alias}" (D5).
       discovery:
         enabled: false
+
+logging:
+  structured:
+    format:
+      # JSON on the console, in the Elastic Common Schema (ECS) format (D17). The service name in
+      # each line comes from spring.application.name above. The local profile switches this off.
+      console: ecs
