@@ -6,4 +6,5 @@ public final class Constants {
     }
 
     public static final int ALIAS_LENGTH_LIMIT = 64;
+    public static final String REQUEST_ID_KEY = "http.request.id";
 }
