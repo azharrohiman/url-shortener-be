@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-10-26_
 
 ---
 
@@ -238,8 +238,23 @@ Reflects the actual state of the code as of the date above.
        Starting a second application would reconfigure logging for the whole JVM, and every
        cached context after it would log plain text.
      - Full suite: **46 tests green.**
-  2. **Request id** — a filter puts a generated id in the MDC for every request and removes it
-     afterwards. Tests: lines from one request share the id; it doesn't carry into the next.
+  2. ✅ **Request id** — `RequestIdFilter` (a `OncePerRequestFilter`) puts a server-generated UUID
+     in the MDC under `REQUEST_ID_KEY` (`http.request.id`, the ECS name, in `Constants`) and
+     removes only that key in a `finally`, so other MDC values survive and a crash mid-request
+     still cleans up. `RequestIdFilterChainTest` is a plain unit test (no Spring, no Docker) with a
+     mocked `FilterChain` that reads the MDC while the request is in progress:
+     - An id is present during the request and gone after it.
+     - Two requests get two distinct, non-null ids.
+     - When the chain throws, the exception still propagates and the id is still removed.
+     - **Registered with Spring** via `@Component`. `RequestIdFilterRegistrationTest`
+       (`@WebMvcTest`, mocked service, no Docker) sends real requests through MockMvc; the mocked
+       service reads the MDC mid-request. For a 302, a handled exception (404) and an unhandled
+       one that escapes the filter, an id is present during the request and gone after it.
+       Checking "present during" is what proves the filter ran: the MDC is empty afterwards
+       whether it ran or not.
+     - **Still to check:** that the id reaches the JSON as `http.request.id`. That needs a log
+       line written during a request, so it moves to step 3, where create logs one.
+     - Full suite: **52 tests green.**
   3. **Domain probe, first event: link created** — introduce the probe and call it from create.
   4. **Probe events for failed redirects** — not found, alias too long, broken link. Fixes R10.
   5. **Docs** — the log field contract in [DESIGN.md](./DESIGN.md), plain vs. JSON logs in
