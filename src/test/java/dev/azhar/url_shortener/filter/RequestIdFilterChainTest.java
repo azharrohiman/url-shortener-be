@@ -54,7 +54,7 @@ class RequestIdFilterChainTest {
         assertThat(MDC.get(REQUEST_ID_KEY))
                 .isNull();
         assertThat(MDC.getCopyOfContextMap())
-                .isNotEmpty();
+                .containsEntry("some-key", "some-value");
     }
 
     @Test
@@ -81,7 +81,7 @@ class RequestIdFilterChainTest {
                 .doesNotHaveDuplicates();
 
         assertThat(MDC.getCopyOfContextMap())
-                .isNotEmpty();
+                .containsEntry("some-key", "some-value");
     }
 
     @Test
@@ -98,6 +98,6 @@ class RequestIdFilterChainTest {
         assertThat(MDC.get(REQUEST_ID_KEY)).isNull();
 
         assertThat(MDC.getCopyOfContextMap())
-                .isNotEmpty();
+                .containsEntry("some-key", "some-value");
     }
 }
