@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-10-30_
 
 ---
 
@@ -561,6 +561,15 @@ log line. Every line written while handling a request carries a **request id**.
 - **Revisit when:** metrics are added (they belong on the probe, not in a second mechanism); or
   logs need correlating across more than one service, at which point distributed tracing
   (Micrometer Tracing / OpenTelemetry trace ids) replaces the home-made request id.
+
+---
+
+### D18 — "Alias created" is logged after commit, via an event
+
+`createShortLink` publishes an `AliasCreatedEvent`; `AliasInstrumentation` handles it with
+`@TransactionalEventListener(phase = AFTER_COMMIT)`. Calling the probe directly logged before the
+`INSERT` ran, so a failed commit still logged "Alias created". A test forces a commit failure and
+asserts nothing is logged. Note: the event is dropped if published outside a transaction.
 
 ---
 

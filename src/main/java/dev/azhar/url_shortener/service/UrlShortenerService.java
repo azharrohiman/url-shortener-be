@@ -8,6 +8,7 @@ import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ public class UrlShortenerService {
     private final EntityManager entityManager;
     private final AliasGenerator aliasGenerator;
     private final UrlAliasRepository urlAliasRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ShortLink createShortLink(String longUrl) {
@@ -28,6 +30,8 @@ public class UrlShortenerService {
         UrlAlias urlAlias = new UrlAlias(nextId, longUrl, aliasGenerator.encode(nextId));
 
         entityManager.persist(urlAlias);
+
+        eventPublisher.publishEvent(new AliasCreatedEvent(urlAlias.getUrlAlias()));
 
         // The entity stops here. Callers get an immutable record, so nothing above this layer can
         // hold — or accidentally mutate — a row that Hibernate is still managing.

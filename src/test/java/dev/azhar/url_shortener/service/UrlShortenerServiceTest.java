@@ -11,12 +11,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
 
 import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -30,6 +36,9 @@ class UrlShortenerServiceTest {
 
     @Autowired
     AliasGenerator aliasGenerator;
+
+    @MockitoBean
+    AliasInstrumentation aliasInstrumentation;
 
     @AfterEach
     void cleanUp() {
@@ -99,6 +108,25 @@ class UrlShortenerServiceTest {
                 .extracting(ShortLink::alias)
                 .containsExactlyInAnyOrderElementsOf(
                         allUrlAliases.stream().map(UrlAlias::getUrlAlias).toList());
+
+        createdShortLinks.forEach(shortLink -> verify(aliasInstrumentation).aliasCreated(new AliasCreatedEvent(shortLink.alias())));
+        verifyNoMoreInteractions(aliasInstrumentation);
+    }
+
+    @Test
+    void given_insert_fails_at_commit_when_createShortLink_then_aliasCreated_is_not_reported() {
+        // given
+        long takenId = urlAliasRepository.getNextId();
+        String nextAlias = aliasGenerator.encode(takenId + 1);
+
+        urlAliasRepository.save(new UrlAlias(takenId, "https://taken.example.com", nextAlias));
+
+        // when
+        assertThatThrownBy(() -> urlShortenerService.createShortLink("https://example.com"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        // then
+        verify(aliasInstrumentation, never()).aliasCreated(any());
     }
 
     @Test
