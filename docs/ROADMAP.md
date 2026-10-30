@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-10-26_
+_Last updated: 2026-10-30_
 
 ---
 
@@ -255,7 +255,18 @@ Reflects the actual state of the code as of the date above.
      - **Still to check:** that the id reaches the JSON as `http.request.id`. That needs a log
        line written during a request, so it moves to step 3, where create logs one.
      - Full suite: **52 tests green.**
-  3. **Domain probe, first event: link created** — introduce the probe and call it from create.
+  3. ✅ **Domain probe, first event: link created** — `AliasInstrumentation` (`service` package,
+     `@Component`). `createShortLink` publishes an `AliasCreatedEvent(alias)`; the probe logs it
+     only after the transaction commits ([D18](./DECISIONS.md)). It only ever sees the alias, so it
+     can never log the long URL. It writes an `INFO` line `"Alias created"` with `alias` as its
+     own top-level JSON field (SLF4J `addKeyValue`).
+     - `UrlShortenerServiceTest` mocks the probe and verifies one `aliasCreated` per stored alias,
+       and none when the commit fails (a pre-taken alias makes the `INSERT` fail at commit).
+     - `AliasInstrumentationTest` boots only the probe (no Docker) and checks the JSON line.
+     - `StructuredLoggingTest` sends a real `POST /api/v1/links` through MockMvc and finds the
+       request id on that line, nested as `{"http": {"request": {"id": ...}}}`. This closes the
+       check carried over from step 2.
+     - Full suite: **55 tests green.**
   4. **Probe events for failed redirects** — not found, alias too long, broken link. Fixes R10.
   5. **Docs** — the log field contract in [DESIGN.md](./DESIGN.md), plain vs. JSON logs in
      [WORKFLOW.md](./WORKFLOW.md).

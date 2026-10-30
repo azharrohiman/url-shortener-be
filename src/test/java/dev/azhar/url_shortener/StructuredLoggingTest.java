@@ -2,31 +2,52 @@ package dev.azhar.url_shortener;
 
 import java.util.UUID;
 
+import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.bootstrap.DefaultBootstrapContext;
 import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import static dev.azhar.url_shortener.common.Constants.REQUEST_ID_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Slf4j
 @SpringBootTest
 @ActiveProfiles("test")
+@AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
 @Import(TestcontainersConfiguration.class)
 class StructuredLoggingTest {
 
+    @Autowired
+    MockMvc mockMvc;
+
+    @Autowired
+    UrlAliasRepository urlAliasRepository;
+
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
+    @AfterEach
+    void cleanUp() {
+        urlAliasRepository.deleteAllInBatch();
+    }
 
     @Test
     void given_default_config_when_log_then_console_line_is_ecs_json(CapturedOutput output) {
@@ -72,5 +93,30 @@ class StructuredLoggingTest {
         // Spring Boot uses the JSON encoder only when this property has a length, so an empty
         // value means plain text. Null would mean neither file sets it, and fails this assertion.
         assertThat(environment.getProperty("logging.structured.format.console")).isEmpty();
+    }
+
+    @Test
+    void given_create_request_when_alias_created_then_log_line_carries_request_id(CapturedOutput output) throws Exception {
+        // when
+        String body = mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/links")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "url": "https://example.com" }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        // then
+        String alias = jsonMapper.readTree(body).at("/alias").asString();
+
+        String line = output.getOut().lines()
+                .filter(l -> l.contains("\"alias\":\"" + alias + "\""))
+                .findFirst()
+                .orElseThrow();
+
+        // Dotted MDC keys come out nested, like the ECS fields: {"http": {"request": {"id": ...}}}.
+        JsonNode json = jsonMapper.readTree(line);
+
+        assertThat(json.at("/" + REQUEST_ID_KEY.replace('.', '/')).asString()).isNotBlank();
     }
 }
