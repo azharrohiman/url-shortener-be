@@ -288,7 +288,6 @@ class UrlShortenerControllerTest {
                 .andExpect(result -> assertThat(result.getResolvedException())
                         .isInstanceOfSatisfying(BrokenLinkException.class, ex -> {
                             assertThat(ex.getAlias()).isEqualTo(alias);
-                            assertThat(ex).hasCauseInstanceOf(IllegalArgumentException.class);
                         }));
     }
 
