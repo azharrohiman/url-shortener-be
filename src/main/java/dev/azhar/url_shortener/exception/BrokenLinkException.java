@@ -6,8 +6,7 @@ import lombok.Getter;
 public class BrokenLinkException extends RuntimeException {
     private final String alias;
 
-    public BrokenLinkException(String alias, Throwable cause) {
-        super(cause);
+    public BrokenLinkException(String alias) {
         this.alias = alias;
     }
 }

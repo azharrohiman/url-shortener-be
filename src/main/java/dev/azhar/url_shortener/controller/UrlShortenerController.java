@@ -1,7 +1,7 @@
 package dev.azhar.url_shortener.controller;
 
 import dev.azhar.url_shortener.config.AppProperties;
-import dev.azhar.url_shortener.exception.BrokenLinkException;
+import dev.azhar.url_shortener.model.LongLink;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.request.CreateUrlAliasRequestDto;
 import dev.azhar.url_shortener.response.CreateUrlAliasResponseDto;
@@ -24,15 +24,9 @@ public class UrlShortenerController {
 
     @GetMapping("/{alias}")
     public ResponseEntity<Void> redirect(@PathVariable String alias) {
-        String url = urlShortenerService.getLongUrl(alias);
+        LongLink url = urlShortenerService.getLongUrl(alias);
 
-        URI uri;
-
-        try {
-            uri = URI.create(url);
-        } catch (IllegalArgumentException e) {
-            throw new BrokenLinkException(alias, e);
-        }
+        URI uri = urlShortenerService.createUri(url);
 
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(uri)

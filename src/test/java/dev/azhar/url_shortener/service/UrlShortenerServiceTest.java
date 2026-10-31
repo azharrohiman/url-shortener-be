@@ -3,7 +3,9 @@ package dev.azhar.url_shortener.service;
 import dev.azhar.url_shortener.TestcontainersConfiguration;
 import dev.azhar.url_shortener.entity.UrlAlias;
 import dev.azhar.url_shortener.exception.AliasLengthLimitException;
+import dev.azhar.url_shortener.exception.BrokenLinkException;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
+import dev.azhar.url_shortener.model.LongLink;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -14,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.net.URI;
 import java.util.List;
 
 import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
@@ -139,10 +142,10 @@ class UrlShortenerServiceTest {
         urlAliasRepository.save(urlAlias2);
 
         // when
-        String actual = urlShortenerService.getLongUrl("def");
+        LongLink actual = urlShortenerService.getLongUrl("def");
 
         // then
-        assertThat(actual)
+        assertThat(actual.url())
                 .isEqualTo("example2.com");
     }
 
@@ -156,10 +159,10 @@ class UrlShortenerServiceTest {
         urlAliasRepository.save(urlAlias1);
 
         // when
-        String actual = urlShortenerService.getLongUrl(alias);
+        LongLink actual = urlShortenerService.getLongUrl(alias);
 
         // then
-        assertThat(actual)
+        assertThat(actual.url())
                 .isEqualTo("example.com");
     }
 
@@ -197,5 +200,28 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(alias))
                 .isInstanceOf(UrlNotFoundException.class)
                 .hasMessage("No URL found with alias: " + alias);
+    }
+
+    @Test
+    void given_long_url_when_createUri_then_long_url_is_returned() {
+        // given
+        LongLink url = LongLink.of("https://www.example.com", "alias");
+
+        // when
+        URI uri = urlShortenerService.createUri(url);
+
+        // then
+        assertThat(uri.toString())
+                .hasToString("https://www.example.com");
+    }
+
+    @Test
+    void given_malformed_long_url_when_createUri_then_brokenLinkException_is_thrown() {
+        // given
+        LongLink url = LongLink.of("malformed url", "alias");
+
+        // when / then
+        assertThatThrownBy(() -> urlShortenerService.createUri(url))
+                .isInstanceOf(BrokenLinkException.class);
     }
 }

@@ -17,4 +17,25 @@ public class AliasInstrumentation {
                 .addKeyValue("alias", event.alias())
                 .log();
     }
+
+    public void aliasLengthExceeded(String alias) {
+        log.atInfo()
+                .setMessage("Alias length exceeded")
+                .addKeyValue("alias", alias)
+                .log();
+    }
+
+    public void aliasNotFound(String alias) {
+        log.atInfo()
+                .setMessage("Alias not found")
+                .addKeyValue("alias", alias)
+                .log();
+    }
+
+    public void linkBroken(String alias) {
+        log.atError()
+                .setMessage("Link broken")
+                .addKeyValue("alias", alias)
+                .log();
+    }
 }

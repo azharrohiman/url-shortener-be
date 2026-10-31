@@ -3,6 +3,7 @@ package dev.azhar.url_shortener.controller;
 import dev.azhar.url_shortener.exception.AliasLengthLimitException;
 import dev.azhar.url_shortener.exception.BrokenLinkException;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
+import dev.azhar.url_shortener.model.LongLink;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.service.UrlShortenerService;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
+import java.net.URI;
 
 import static dev.azhar.url_shortener.common.Constants.ALIAS_LENGTH_LIMIT;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -225,8 +228,15 @@ class UrlShortenerControllerTest {
         // given
         String alias = "some-alias";
 
+        LongLink url = LongLink.of("https://example.com", alias);
+
+        URI uri = URI.create(url.url());
+
         given(urlShortenerService.getLongUrl(alias))
-                .willReturn("https://example.com");
+                .willReturn(url);
+
+        given(urlShortenerService.createUri(url))
+                .willReturn(uri);
 
         // then
         mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", alias))
@@ -258,8 +268,13 @@ class UrlShortenerControllerTest {
         // given
         String alias = "some-alias";
 
+        LongLink url = LongLink.of("malformed url", alias);
+
         given(urlShortenerService.getLongUrl(alias))
-                .willReturn("malformed url");
+                .willReturn(url);
+
+        given(urlShortenerService.createUri(url))
+                .willThrow(new BrokenLinkException(alias));
 
         // then
         mockMvc.perform(MockMvcRequestBuilders.get("/{alias}", alias))
