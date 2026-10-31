@@ -46,4 +46,70 @@ class AliasInstrumentationTest {
         assertThat(json.at("/log/logger").asString()).isEqualTo(AliasInstrumentation.class.getName());
         assertThat(json.at("/alias").asString()).isEqualTo(alias);
     }
+
+    @Test
+    void given_alias_when_aliasLengthExceeded_then_info_line_carries_alias_as_its_own_field(CapturedOutput output) {
+        // given
+        String alias = "alias-" + UUID.randomUUID();
+
+        // when
+        aliasInstrumentation.aliasLengthExceeded(alias);
+
+        // then
+        String line = output.getOut().lines()
+                .filter(l -> l.contains(alias))
+                .findFirst()
+                .orElseThrow();
+
+        JsonNode json = jsonMapper.readTree(line);
+
+        assertThat(json.at("/message").asString()).isEqualTo("Alias length exceeded");
+        assertThat(json.at("/log/level").asString()).isEqualTo("INFO");
+        assertThat(json.at("/log/logger").asString()).isEqualTo(AliasInstrumentation.class.getName());
+        assertThat(json.at("/alias").asString()).isEqualTo(alias);
+    }
+
+    @Test
+    void given_alias_when_aliasNotFound_then_info_line_carries_alias_as_its_own_field(CapturedOutput output) {
+        // given
+        String alias = "alias-" + UUID.randomUUID();
+
+        // when
+        aliasInstrumentation.aliasNotFound(alias);
+
+        // then
+        String line = output.getOut().lines()
+                .filter(l -> l.contains(alias))
+                .findFirst()
+                .orElseThrow();
+
+        JsonNode json = jsonMapper.readTree(line);
+
+        assertThat(json.at("/message").asString()).isEqualTo("Alias not found");
+        assertThat(json.at("/log/level").asString()).isEqualTo("INFO");
+        assertThat(json.at("/log/logger").asString()).isEqualTo(AliasInstrumentation.class.getName());
+        assertThat(json.at("/alias").asString()).isEqualTo(alias);
+    }
+
+    @Test
+    void given_alias_when_linkBroken_then_error_line_carries_alias_as_its_own_field(CapturedOutput output) {
+        // given
+        String alias = "alias-" + UUID.randomUUID();
+
+        // when
+        aliasInstrumentation.linkBroken(alias);
+
+        // then
+        String line = output.getOut().lines()
+                .filter(l -> l.contains(alias))
+                .findFirst()
+                .orElseThrow();
+
+        JsonNode json = jsonMapper.readTree(line);
+
+        assertThat(json.at("/message").asString()).isEqualTo("Link broken");
+        assertThat(json.at("/log/level").asString()).isEqualTo("ERROR");
+        assertThat(json.at("/log/logger").asString()).isEqualTo(AliasInstrumentation.class.getName());
+        assertThat(json.at("/alias").asString()).isEqualTo(alias);
+    }
 }

@@ -2,6 +2,7 @@ package dev.azhar.url_shortener.filter;
 
 import dev.azhar.url_shortener.controller.UrlShortenerController;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
+import dev.azhar.url_shortener.model.LongLink;
 import dev.azhar.url_shortener.service.UrlShortenerService;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static dev.azhar.url_shortener.common.Constants.REQUEST_ID_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,7 +43,7 @@ class RequestIdFilterRegistrationTest {
 
         given(urlShortenerService.getLongUrl(ALIAS)).willAnswer(invocation -> {
             requestIdDuringRequest.set(MDC.get(REQUEST_ID_KEY));
-            return "https://example.com";
+            return LongLink.of( "https://example.com", anyString());
         });
 
         // when

@@ -44,8 +44,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BrokenLinkException.class)
     public ResponseEntity<ErrorResponseDto> handleBrokenLink(BrokenLinkException ex) {
-        log.error("Alias related to broken URL is: {}", ex.getAlias(), ex);
-
         return buildResponse(ErrorResponseDto.builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .title("Broken link")
