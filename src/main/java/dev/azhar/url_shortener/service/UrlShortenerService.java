@@ -5,6 +5,7 @@ import dev.azhar.url_shortener.exception.AliasLengthLimitException;
 import dev.azhar.url_shortener.exception.BrokenLinkException;
 import dev.azhar.url_shortener.exception.UrlNotFoundException;
 import dev.azhar.url_shortener.mapper.UrlAliasMapper;
+import dev.azhar.url_shortener.model.AliasCreatedEvent;
 import dev.azhar.url_shortener.model.LongLink;
 import dev.azhar.url_shortener.model.ShortLink;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;

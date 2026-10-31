@@ -1,5 +1,6 @@
 package dev.azhar.url_shortener.service;
 
+import dev.azhar.url_shortener.model.AliasCreatedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
