@@ -1,5 +1,6 @@
 package dev.azhar.url_shortener.service;
 
+import dev.azhar.url_shortener.model.AliasCreatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
