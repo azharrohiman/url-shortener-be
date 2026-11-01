@@ -2,6 +2,7 @@ package dev.azhar.url_shortener;
 
 import java.util.UUID;
 
+import dev.azhar.url_shortener.entity.UrlAlias;
 import dev.azhar.url_shortener.repository.UrlAliasRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -118,5 +119,24 @@ class StructuredLoggingTest {
         JsonNode json = jsonMapper.readTree(line);
 
         assertThat(json.at("/" + REQUEST_ID_KEY.replace('.', '/')).asString()).isNotBlank();
+    }
+
+    @Test
+    void given_unparseable_stored_url_when_redirect_then_long_url_is_never_logged(CapturedOutput output) throws Exception {
+        // given
+        String alias = "broken" + UUID.randomUUID().toString().substring(0, 8);
+        String longUrl = "https://example.com/path with spaces?token=" + UUID.randomUUID();
+
+        urlAliasRepository.save(new UrlAlias(urlAliasRepository.getNextId(), longUrl, alias));
+
+        // when
+        mockMvc.perform(MockMvcRequestBuilders.get("/" + alias))
+                .andExpect(status().isInternalServerError());
+
+        // then
+        assertThat(output.getAll().lines())
+                .anyMatch(l -> l.contains("\"message\":\"Link broken\"") && l.contains("\"alias\":\"" + alias + "\""));
+
+        assertThat(output.getAll()).doesNotContain(longUrl);
     }
 }

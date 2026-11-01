@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @SpringBootTest
@@ -148,6 +149,8 @@ class UrlShortenerServiceTest {
         // then
         assertThat(actual.url())
                 .isEqualTo("example2.com");
+
+        verifyNoInteractions(aliasInstrumentation);
     }
 
     @Test
@@ -165,6 +168,8 @@ class UrlShortenerServiceTest {
         // then
         assertThat(actual.url())
                 .isEqualTo("example.com");
+
+        verifyNoInteractions(aliasInstrumentation);
     }
 
     @Test
@@ -180,6 +185,9 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(lowercaseAlias))
                 .isInstanceOf(UrlNotFoundException.class)
                 .hasMessage("No URL found with alias: " + lowercaseAlias);
+
+        verify(aliasInstrumentation).aliasNotFound(lowercaseAlias);
+        verifyNoMoreInteractions(aliasInstrumentation);
     }
 
     @Test
@@ -190,6 +198,9 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(longAlias))
                 .isInstanceOf(AliasLengthLimitException.class)
                 .hasMessage(String.format("Alias length %d exceeds limit of %d.", longAlias.length(), ALIAS_LENGTH_LIMIT));
+
+        verify(aliasInstrumentation).aliasLengthExceeded(longAlias);
+        verifyNoMoreInteractions(aliasInstrumentation);
     }
 
     @Test
@@ -201,6 +212,9 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> urlShortenerService.getLongUrl(alias))
                 .isInstanceOf(UrlNotFoundException.class)
                 .hasMessage("No URL found with alias: " + alias);
+
+        verify(aliasInstrumentation).aliasNotFound(alias);
+        verifyNoMoreInteractions(aliasInstrumentation);
     }
 
     @Test
@@ -214,6 +228,8 @@ class UrlShortenerServiceTest {
         // then
         assertThat(uri.toString())
                 .hasToString("https://www.example.com");
+
+        verifyNoInteractions(aliasInstrumentation);
     }
 
     @Test
@@ -224,5 +240,8 @@ class UrlShortenerServiceTest {
         // when / then
         assertThatThrownBy(() -> urlShortenerService.createUri(url))
                 .isInstanceOf(BrokenLinkException.class);
+
+        verify(aliasInstrumentation).linkBroken("alias");
+        verifyNoMoreInteractions(aliasInstrumentation);
     }
 }
