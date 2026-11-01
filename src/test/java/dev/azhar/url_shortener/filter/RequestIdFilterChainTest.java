@@ -2,6 +2,8 @@ package dev.azhar.url_shortener.filter;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -25,6 +27,14 @@ class RequestIdFilterChainTest {
     private MockHttpServletResponse response;
     private FilterChain filterChain;
 
+    private static final String SOME_KEY = "SOME_KEY";
+    private static final String SOME_VALUE = "SOME_VALUE";
+
+    @BeforeAll
+    static void beforeAll() {
+        MDC.put(SOME_KEY, SOME_VALUE);
+    }
+
     @BeforeEach
     void setup() {
         filter = new RequestIdFilter();
@@ -33,11 +43,14 @@ class RequestIdFilterChainTest {
         filterChain = mock(FilterChain.class);
     }
 
+    @AfterAll
+    static void cleanup() {
+        MDC.remove(SOME_KEY);
+    }
+
     @Test
     void given_doFilter_is_called_then_requestId_is_stored_during_the_request_and_cleared_after_filterChain_doFilter() throws ServletException, IOException {
         // given
-        MDC.put("some-key", "some-value");
-
         AtomicReference<String> requestIdDuringRequest = new AtomicReference<>();
         doAnswer(invocation -> {
             requestIdDuringRequest.set(MDC.get(REQUEST_ID_KEY));
@@ -54,14 +67,12 @@ class RequestIdFilterChainTest {
         assertThat(MDC.get(REQUEST_ID_KEY))
                 .isNull();
         assertThat(MDC.getCopyOfContextMap())
-                .containsEntry("some-key", "some-value");
+                .containsEntry(SOME_KEY, SOME_VALUE);
     }
 
     @Test
     void given_doFilter_is_called_twice_then_two_unique_requestIds_are_stored_in_MDC() throws ServletException, IOException {
         // given
-        MDC.put("some-key", "some-value");
-
         List<String> requestIds = new ArrayList<>();
 
         doAnswer(invocation -> {
@@ -81,14 +92,12 @@ class RequestIdFilterChainTest {
                 .doesNotHaveDuplicates();
 
         assertThat(MDC.getCopyOfContextMap())
-                .containsEntry("some-key", "some-value");
+                .containsEntry(SOME_KEY, SOME_VALUE);
     }
 
     @Test
     void given_filterChain_doFilter_throws_exception_then_requestId_is_cleared() throws ServletException, IOException {
         // given
-        MDC.put("some-key", "some-value");
-
         doThrow(ServletException.class)
                 .when(filterChain).doFilter(request, response);
 
@@ -98,6 +107,6 @@ class RequestIdFilterChainTest {
         assertThat(MDC.get(REQUEST_ID_KEY)).isNull();
 
         assertThat(MDC.getCopyOfContextMap())
-                .containsEntry("some-key", "some-value");
+                .containsEntry(SOME_KEY, SOME_VALUE);
     }
 }

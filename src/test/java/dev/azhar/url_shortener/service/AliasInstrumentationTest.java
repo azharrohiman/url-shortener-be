@@ -51,14 +51,14 @@ class AliasInstrumentationTest {
     @Test
     void given_alias_when_aliasLengthExceeded_then_info_line_carries_alias_as_its_own_field(CapturedOutput output) {
         // given
-        String alias = "alias-" + UUID.randomUUID();
+        String alias = "a".repeat(100);
 
         // when
         aliasInstrumentation.aliasLengthExceeded(alias);
 
         // then
         String line = output.getOut().lines()
-                .filter(l -> l.contains(alias))
+                .filter(l -> l.contains("Alias length exceeded"))
                 .findFirst()
                 .orElseThrow();
 
@@ -67,7 +67,7 @@ class AliasInstrumentationTest {
         assertThat(json.at("/message").asString()).isEqualTo("Alias length exceeded");
         assertThat(json.at("/log/level").asString()).isEqualTo("INFO");
         assertThat(json.at("/log/logger").asString()).isEqualTo(AliasInstrumentation.class.getName());
-        assertThat(json.at("/alias").asString()).isEqualTo(alias);
+        assertThat(json.at("/alias/length").asInt()).isEqualTo(100);
     }
 
     @Test

@@ -11,32 +11,34 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class AliasInstrumentation {
 
+    private static final String ALIAS_LOG_KEY = "alias";
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void aliasCreated(AliasCreatedEvent event) {
         log.atInfo()
                 .setMessage("Alias created")
-                .addKeyValue("alias", event.alias())
+                .addKeyValue(ALIAS_LOG_KEY, event.alias())
                 .log();
     }
 
     public void aliasLengthExceeded(String alias) {
         log.atInfo()
                 .setMessage("Alias length exceeded")
-                .addKeyValue("alias", alias)
+                .addKeyValue("alias.length", alias.length())
                 .log();
     }
 
     public void aliasNotFound(String alias) {
         log.atInfo()
                 .setMessage("Alias not found")
-                .addKeyValue("alias", alias)
+                .addKeyValue(ALIAS_LOG_KEY, alias)
                 .log();
     }
 
     public void linkBroken(String alias) {
         log.atError()
                 .setMessage("Link broken")
-                .addKeyValue("alias", alias)
+                .addKeyValue(ALIAS_LOG_KEY, alias)
                 .log();
     }
 }
