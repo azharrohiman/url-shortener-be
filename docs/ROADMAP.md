@@ -3,7 +3,7 @@
 > Single source of truth for **what we're building, in what order, and what's done.**
 > Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-10-30_
+_Last updated: 2026-11-02_
 
 ---
 
@@ -221,60 +221,25 @@ Reflects the actual state of the code as of the date above.
     makes the whole response `DOWN`/503) is relied on.
   - Full suite: **44 tests green.**
 
+- **Structured logging — green. v1 complete.** Logs are JSON lines in the ECS format, decided in
+  [D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls).
+  The `local` profile switches back to plain text.
+  - Every line written during a request carries a server-generated request id (`RequestIdFilter`).
+  - Our own code logs four events through one domain probe, `AliasInstrumentation`: link created
+    (after commit, [D18](./DECISIONS.md#d18--alias-created-is-logged-after-commit-via-an-event)),
+    alias not found, alias too long, and broken link. The long URL is never logged, which fixed
+    [R10](./DECISIONS.md#r10).
+  - Field contract in [DESIGN.md](./DESIGN.md#log-contract); plain vs. JSON and filtering with `jq`
+    in [WORKFLOW.md](./WORKFLOW.md#logs-plain-text-or-json).
+  - Full suite: **61 tests green.**
+
 ### In progress / partial
-- **Structured logging** — JSON log output, so a failed load test can be investigated. The last
-  operational basic in the v1 scope. Decisions in [D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls); each step is test-first
-  and its own PR:
-  0. ✅ **Decide and record** — [D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls) (ECS JSON, domain probe, request id, what
-     is never logged) and [R10](./DECISIONS.md#r10) (the broken-link log line leaks the long URL).
-  1. ✅ **JSON output** — config only: `logging.structured.format.console: ecs` in
-     `application.yaml`, overridden to `""` in `application-local.yaml` (Spring Boot switches to
-     JSON only when the value is non-empty). `StructuredLoggingTest`:
-     - Captures a real log line and asserts it parses as JSON with `message`, `log.level`,
-       `log.logger`, `service.name` (`url-shortener`, from `spring.application.name`),
-       `@timestamp` and `ecs.version`. ECS names are nested objects in the output:
-       `{"log": {"level": ...}}`.
-     - Checks the `local` profile by resolving its config files, not by starting the app.
-       Starting a second application would reconfigure logging for the whole JVM, and every
-       cached context after it would log plain text.
-     - Full suite: **46 tests green.**
-  2. ✅ **Request id** — `RequestIdFilter` (a `OncePerRequestFilter`) puts a server-generated UUID
-     in the MDC under `REQUEST_ID_KEY` (`http.request.id`, the ECS name, in `Constants`) and
-     removes only that key in a `finally`, so other MDC values survive and a crash mid-request
-     still cleans up. `RequestIdFilterChainTest` is a plain unit test (no Spring, no Docker) with a
-     mocked `FilterChain` that reads the MDC while the request is in progress:
-     - An id is present during the request and gone after it.
-     - Two requests get two distinct, non-null ids.
-     - When the chain throws, the exception still propagates and the id is still removed.
-     - **Registered with Spring** via `@Component`. `RequestIdFilterRegistrationTest`
-       (`@WebMvcTest`, mocked service, no Docker) sends real requests through MockMvc; the mocked
-       service reads the MDC mid-request. For a 302, a handled exception (404) and an unhandled
-       one that escapes the filter, an id is present during the request and gone after it.
-       Checking "present during" is what proves the filter ran: the MDC is empty afterwards
-       whether it ran or not.
-     - **Still to check:** that the id reaches the JSON as `http.request.id`. That needs a log
-       line written during a request, so it moves to step 3, where create logs one.
-     - Full suite: **52 tests green.**
-  3. ✅ **Domain probe, first event: link created** — `AliasInstrumentation` (`service` package,
-     `@Component`). `createShortLink` publishes an `AliasCreatedEvent(alias)`; the probe logs it
-     only after the transaction commits ([D18](./DECISIONS.md)). It only ever sees the alias, so it
-     can never log the long URL. It writes an `INFO` line `"Alias created"` with `alias` as its
-     own top-level JSON field (SLF4J `addKeyValue`).
-     - `UrlShortenerServiceTest` mocks the probe and verifies one `aliasCreated` per stored alias,
-       and none when the commit fails (a pre-taken alias makes the `INSERT` fail at commit).
-     - `AliasInstrumentationTest` boots only the probe (no Docker) and checks the JSON line.
-     - `StructuredLoggingTest` sends a real `POST /api/v1/links` through MockMvc and finds the
-       request id on that line, nested as `{"http": {"request": {"id": ...}}}`. This closes the
-       check carried over from step 2.
-     - Full suite: **55 tests green.**
-  4. **Probe events for failed redirects** — not found, alias too long, broken link. Fixes R10.
-  5. **Docs** — the log field contract in [DESIGN.md](./DESIGN.md), plain vs. JSON logs in
-     [WORKFLOW.md](./WORKFLOW.md).
+_Nothing in progress._
 
 ### Next (immediate)
 
-The build order is complete; v1 finishes with structured logging (in progress above). Load
-testing comes after it, and **before** Analytics (F5) — F5 adds work to the redirect path, and its
+v1 is complete, including structured logging. Load testing comes
+next, and **before** Analytics (F5) — F5 adds work to the redirect path, and its
 cost can only be measured against a baseline taken without it ([D13](./DECISIONS.md#d13--no-local-performance-testing-the-local-check-is-the-query-plan) names F5 as
 the first change worth measuring).
 
