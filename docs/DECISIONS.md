@@ -3,7 +3,7 @@
 > Short log of the technical decisions we've made (with the trade-off behind each)
 > and the open risks to address. Append new entries; don't rewrite history.
 
-_Last updated: 2026-10-30_
+_Last updated: 2026-11-02_
 
 ---
 
@@ -678,7 +678,7 @@ there, so every create runs a `SELECT` that can only ever miss, then the `INSERT
 > ✅ **Resolved:** `UrlShortenerService.createShortLink` now calls `entityManager.persist(...)`
 > instead of `save(...)`, so create is a single `INSERT`. Not pinned by a statement-count test.
 
-### <a id="r10"></a>R10 — Broken-link log line contains the long URL ⚠️ OPEN
+### <a id="r10"></a>R10 — Broken-link log line contains the long URL ⚠️ OPEN → ✅ RESOLVED
 `GlobalExceptionHandler.handleBrokenLink` logs `BrokenLinkException` with its stack trace. That
 exception wraps the `IllegalArgumentException` from `URI.create(longUrl)`, whose message quotes the
 input — so the full stored URL is written to the log, in breach of
@@ -690,3 +690,8 @@ message into its own, so the URL appears twice.
   *type*, not the cause's message or stack trace — or wrap it so the URL is never in the message.
 - **Pin it with a test:** feed an unparseable stored URL and assert the captured log output does not
   contain it.
+
+> ✅ **Resolved:** `BrokenLinkException` now carries only the alias, and `GlobalExceptionHandler` no
+> longer logs it. The broken-link line comes from the probe (`linkBroken`) and holds only the alias.
+> Pinned by `StructuredLoggingTest`: a redirect to an unparseable stored URL returns 500, writes the
+> `Link broken` line, and the URL appears nowhere in the output.

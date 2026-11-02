@@ -3,7 +3,7 @@
 > The agreed contract. Code should conform to this; where current code diverges it's
 > noted in [ROADMAP.md](./ROADMAP.md) and [DECISIONS.md](./DECISIONS.md).
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-11-02_
 
 ---
 
@@ -202,3 +202,50 @@ Three types describe the same link, one per boundary. Each stops where the next 
 `UrlAliasMapper.toShortLink(entity)` (package `mapper`) is the single crossing between the bottom
 two. The controller maps `ShortLink` → response DTO, and derives `shortUrl` there since it is the
 only layer that knows the request host.
+
+---
+
+## Log contract
+
+Each log line is one JSON object in the Elastic Common Schema (ECS) format
+([D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls)).
+The names below are fixed, so searches and alerts can rely on them. A dotted name is nested in the
+JSON: `log.level` is `{"log": {"level": "INFO"}}`. How to switch to plain text, and how to filter
+the JSON, is in [WORKFLOW.md](./WORKFLOW.md#logs-plain-text-or-json).
+
+### Fields on every line
+
+| Field | Example | Meaning |
+|-------|---------|---------|
+| `@timestamp` | `2026-11-01T07:24:28.692Z` | When the line was written, in UTC. |
+| `log.level` | `INFO` | `INFO` for expected events, `ERROR` for faults on our side. |
+| `log.logger` | `dev.azhar.url_shortener.service.AliasInstrumentation` | The class that wrote the line. |
+| `message` | `Alias created` | Fixed text per event; see the table below. |
+| `service.name` | `url-shortener` | From `spring.application.name`. |
+| `ecs.version` | `8.11` | The ECS version the format follows. |
+| `http.request.id` | `89ae75bb-…` (a UUID) | Only on lines written while a request is being handled. The server generates a new one per request; it is not read from or returned in a header. |
+
+### Events
+
+Our own code logs only these events, all from `AliasInstrumentation`:
+
+| Event | `message` | `log.level` | Extra field |
+|-------|-----------|-------------|-------------|
+| Link created | `Alias created` | `INFO` | `alias`. Written only after the row is committed ([D18](./DECISIONS.md#d18--alias-created-is-logged-after-commit-via-an-event)). |
+| Alias not found (404) | `Alias not found` | `INFO` | `alias` |
+| Alias too long (400) | `Alias length exceeded` | `INFO` | `alias.length` (a number) |
+| Broken link (500) | `Link broken` | `ERROR` | `alias` |
+
+Successful redirects are not logged: redirect is the hot path, and a line per request would slow
+it down and skew load tests.
+
+Spring, Hibernate and Liquibase still write their own lines in the same JSON format, but those
+aren't part of this contract.
+
+### Never logged
+
+- **The long URL**, anywhere in a line. It can carry tokens or personal data, and the alias is
+  enough to find the row.
+- **Request bodies.**
+- **An over-long alias.** It comes from the caller and has no length limit, so only its length is
+  logged.

@@ -3,7 +3,7 @@
 > How we build this project: **test-first (TDD)**, with the database provided by
 > containers. The app is *not* run-and-poke-in-Postman as the primary loop.
 
-_Last updated: 2026-10-23_
+_Last updated: 2026-11-02_
 
 ---
 
@@ -113,6 +113,44 @@ rebuild the image (`--build`) only when they pull new backend code — not part 
 > Note: browser calls from the frontend (`localhost:5173`/`3000`) to the backend (`:8080`)
 > will need **CORS** configured on the backend. That's added alongside the first real
 > endpoint, not before.
+
+---
+
+## Logs: plain text or JSON
+
+Logs are **JSON by default**, one object per line
+([D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls)).
+The `local` profile switches back to plain text, which is easier to read while developing. The
+fields each line carries are listed in [DESIGN.md](./DESIGN.md#log-contract).
+
+| How you run it | Logs |
+|----------------|------|
+| `./mvnw test` | JSON |
+| `./mvnw spring-boot:run` or `spring-boot:test-run` | JSON |
+| `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run` | Plain text |
+| `docker compose -f compose.app.yaml up` | Plain text: the file sets `SPRING_PROFILES_ACTIVE=local` |
+
+The `local` profile also turns on SQL logging, so expect more output with it.
+
+### Reading JSON logs with jq
+
+[`jq`](https://jqlang.org) filters JSON on the command line (`brew install jq`). Not every line
+is JSON (Maven's output and the Spring banner aren't), so each command starts with
+`jq -R 'fromjson? | …'`, which skips those lines instead of stopping on them.
+
+```bash
+# Readable: time, level and message only
+./mvnw spring-boot:run | jq -Rr 'fromjson? | "\(.["@timestamp"]) \(.log.level) \(.message)"'
+
+# Errors only
+./mvnw spring-boot:run | jq -R 'fromjson? | select(.log.level == "ERROR")'
+
+# Everything about one alias
+./mvnw spring-boot:run | jq -R 'fromjson? | select(.alias == "aB3kZ9q")'
+
+# Every line from one request
+./mvnw spring-boot:run | jq -R 'fromjson? | select(.http.request.id == "<id>")'
+```
 
 ---
 
