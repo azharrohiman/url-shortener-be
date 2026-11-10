@@ -16,10 +16,12 @@ current as scope, decisions, and progress change.
 | Doc | What it owns | Read before |
 |-----|--------------|-------------|
 | [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Scope (v1 vs. v2), features, build order, status board | starting any work — it names the current step |
-| [`docs/DESIGN.md`](./docs/DESIGN.md) | API contract, data model, naming conventions, API↔DB mapping | touching endpoints, DTOs, entities, or migrations |
+| [`docs/system_design/HIGH_LEVEL_DESIGN.md`](./docs/system_design/HIGH_LEVEL_DESIGN.md) | Components, request flows, API contract, error responses | touching endpoints or error handling |
+| [`docs/system_design/DESIGN_DEEP_DIVE.md`](./docs/system_design/DESIGN_DEEP_DIVE.md) | Data model, naming conventions, API↔DB mapping, code layers, log contract | touching DTOs, entities, migrations, or logging |
 | [`docs/DECISIONS.md`](./docs/DECISIONS.md) | Numbered decision log (`D<n>`) and open-risk register (`R<n>`) | revisiting a settled choice, or to check known risks |
 | [`docs/WORKFLOW.md`](./docs/WORKFLOW.md) | Local development: tests, running the app, containers, credentials | running tests, the app, or Compose |
 | [`docs/SCENARIO.md`](./docs/SCENARIO.md) | Worked example of the unique-violation retry cascade under D10 | working on custom aliases (F4) |
+| [`docs/system_design/BACK_OF_THE_ENVELOPE_ESTIMATION.md`](./docs/system_design/BACK_OF_THE_ENVELOPE_ESTIMATION.md) | Estimated scale: traffic per second, total records, and storage over 10 years | sizing caches, storage, or load-test targets |
 
 Also: [`README.md`](./README.md) for the public overview, [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 for branch naming, PR titles, and what is enforced on `main`.
@@ -61,8 +63,9 @@ The docs above hold the detail. These are the rules that apply to every change.
 
 ### Code
 
-- Conform to the API contract and data model in `DESIGN.md`. Where the code and the contract
-  disagree, that is a defect in one of them — say which, and don't silently follow the code.
+- Conform to the API contract in `HIGH_LEVEL_DESIGN.md` and the data model in `DESIGN_DEEP_DIVE.md`.
+  Where the code and the contract disagree, that is a defect in one of them — say which, and
+  don't silently follow the code.
 - Build in small increments, each one independently testable.
 - A feature is done when it has tests, input validation, and sensible error handling — not
   when the happy path works.

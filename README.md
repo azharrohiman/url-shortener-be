@@ -239,7 +239,7 @@ and serves the API on `http://localhost:8080`.
 
 ## API
 
-The agreed contract, in full, is in [`docs/DESIGN.md`](./docs/DESIGN.md).
+The agreed contract, in full, is in [`docs/system_design/HIGH_LEVEL_DESIGN.md`](./docs/system_design/HIGH_LEVEL_DESIGN.md#api-contract-mvp).
 Summarised:
 
 | Method | Path              | Success | Errors |
@@ -257,7 +257,9 @@ management API, and a root-level `/{alias}` so short URLs stay short.
 | Document | Contents |
 |----------|----------|
 | [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Scope, features, build order, and what is done vs. next |
-| [`docs/DESIGN.md`](./docs/DESIGN.md) | API contract, data model, naming conventions |
+| [`docs/system_design/HIGH_LEVEL_DESIGN.md`](./docs/system_design/HIGH_LEVEL_DESIGN.md) | Components, request flows, API contract, error responses |
+| [`docs/system_design/BACK_OF_THE_ENVELOPE_ESTIMATION.md`](./docs/system_design/BACK_OF_THE_ENVELOPE_ESTIMATION.md) | Estimated traffic and storage at scale |
+| [`docs/system_design/DESIGN_DEEP_DIVE.md`](./docs/system_design/DESIGN_DEEP_DIVE.md) | Data model, naming conventions, code layers, log contract |
 | [`docs/DECISIONS.md`](./docs/DECISIONS.md) | Append-only log of technical decisions, trade-offs, and open risks |
 | [`docs/WORKFLOW.md`](./docs/WORKFLOW.md) | How to develop, test, and run the project locally |
 

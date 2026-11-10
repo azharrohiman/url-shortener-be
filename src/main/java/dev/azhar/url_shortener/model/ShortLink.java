@@ -11,7 +11,8 @@ package dev.azhar.url_shortener.model;
  * can see.
  *
  * <p>Deliberately narrower than the entity: no {@code id} (a persistence detail) and no
- * {@code createdAt} (not part of the API contract in {@code docs/DESIGN.md}). Add either when a
+ * {@code createdAt} (not part of the API contract in
+ * {@code docs/system_design/HIGH_LEVEL_DESIGN.md}). Add either when a
  * caller genuinely needs it.
  */
 public record ShortLink(String alias, String longUrl) {

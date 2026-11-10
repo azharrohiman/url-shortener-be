@@ -370,7 +370,7 @@ permutation of the 62 alphanumeric characters**, **`minLength = 7`**, and the li
 
 - **Why `minLength = 7`.** With no minimum, `encode(1)` is a two-character code: it reads as a
   toy and makes early enumeration trivial. Seven gives uniform-width codes regardless of id size
-  and matches the `aB3kZ9q` example already in [DESIGN.md](./DESIGN.md#1-create-a-short-link), so the contract doc and
+  and matches the `aB3kZ9q` example already in [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md#1-create-a-short-link), so the contract doc and
   the code agree without extra effort. 62⁷ ≈ 3.5 × 10¹² makes blind guessing tedious.
 
 - **Why the default blocklist stays on.** Sqids ships a profanity list and transparently picks a
@@ -450,7 +450,7 @@ static `UrlAliasMapper.toShortLink(entity)` in `dev.azhar.url_shortener.mapper`.
 
 - **Deliberately narrower than the entity.** No `id`: it is a persistence detail, and it is exactly
   the value [R8](#r8) says not to spread
-  around. No `createdAt`: it isn't in the [DESIGN.md](./DESIGN.md#1-create-a-short-link) contract. Add either when
+  around. No `createdAt`: it isn't in the [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md#1-create-a-short-link) contract. Add either when
   something needs it, not in advance.
 
 - **Why the mapper is its own class.** A factory method on `ShortLink` would put a JPA import in the
@@ -513,7 +513,7 @@ log line. Every line written while handling a request carries a **request id**.
   published, versioned schema with documented field names (`@timestamp`, `log.level`,
   `service.name`, `error.stack_trace`); the Logstash format is one tool's convention. Choosing a
   documented schema means the field names don't have to be invented, and the log contract in
-  [DESIGN.md](./DESIGN.md) can point at it. Not chosen: `logstash-logback-encoder`, a separate
+  [DESIGN_DEEP_DIVE.md](./system_design/DESIGN_DEEP_DIVE.md) can point at it. Not chosen: `logstash-logback-encoder`, a separate
   library that did this job before Spring Boot 3.4 and is now an unnecessary dependency.
 
 - **Where JSON is on.** JSON is the **default**, so the Docker image, the load tests and the test
@@ -603,7 +603,7 @@ duplication.
 
 ### <a id="r4"></a>R4 — Controller doesn't match the contract yet ✅ RESOLVED
 `POST /create` echoes the URL; needs to become `POST /api/v1/links` returning the
-documented response (see [DESIGN.md](./DESIGN.md#1-create-a-short-link)). Tests reference `/create` and assert
+documented response (see [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md#1-create-a-short-link)). Tests reference `/create` and assert
 200 on success — both will change when the real endpoint lands.
 > ✅ **Resolved in build-order step 3c:** `POST /api/v1/links` returns 201 with the documented
 > body, and the tests assert it. `POST /create` is gone.
