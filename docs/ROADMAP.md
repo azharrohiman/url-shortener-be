@@ -1,9 +1,9 @@
 # URL Shortener — Roadmap & Progress
 
 > Single source of truth for **what we're building, in what order, and what's done.**
-> Companion docs: [DESIGN.md](./DESIGN.md) (API + schema), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
+> Companion docs: [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md) (API), [DESIGN_DEEP_DIVE.md](./system_design/DESIGN_DEEP_DIVE.md) (schema + code layers), [DECISIONS.md](./DECISIONS.md) (decisions + risks).
 
-_Last updated: 2026-11-02_
+_Last updated: 2026-11-10_
 
 ---
 
@@ -133,7 +133,7 @@ Reflects the actual state of the code as of the date above.
 - **Entity no longer leaves the service — green.** `createShortLink` returns the `ShortLink` record
   (`model` package) instead of the `UrlAlias` entity, mapped by static `UrlAliasMapper.toShortLink`
   (`mapper` package). See [D15](./DECISIONS.md#d15--the-service-returns-a-domain-record-never-the-entity) for why, and the layer table in
-  [DESIGN.md](./DESIGN.md#layers--types) for the three types and where each stops.
+  [DESIGN_DEEP_DIVE.md](./system_design/DESIGN_DEEP_DIVE.md#layers--types) for the three types and where each stops.
   - `UrlAliasMapperTest` is a plain unit test — no Spring, no Docker.
   - `UrlShortenerServiceTest` now also asserts the returned `ShortLink`s carry exactly the aliases
     that were persisted, so the service can't return something other than what it wrote. Its
@@ -168,7 +168,7 @@ Reflects the actual state of the code as of the date above.
   - Full suite: **33 tests green.**
 - **Step 4b (controller) — green. Step 4 complete.** `GET /{alias}` calls `getLongUrl` and returns
   **302** with `Location: <longUrl>`. Exceptions become responses in `GlobalExceptionHandler`, which
-  settles the open question from 4a. The full contract, with bodies, is in [DESIGN.md](./DESIGN.md#api-contract-mvp).
+  settles the open question from 4a. The full contract, with bodies, is in [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md#api-contract-mvp).
   - **404** — `UrlNotFoundException` → `{ "message": ... }`.
   - **400 for an over-long alias** — `getLongUrl` rejects an alias longer than `ALIAS_LENGTH_LIMIT`
     (64, the width of `URL_ALIAS`) with `AliasLengthLimitException` before querying. The service
@@ -189,7 +189,7 @@ Reflects the actual state of the code as of the date above.
   shapes: validation failures returned `{ "<field>": "<reason>" }`, and every other error returned
   `{ "message": "..." }`. Every error now returns one shape based on RFC 9457 — `status`, `title`,
   `detail`, plus a `validation` list on validation failures only — sent as
-  `application/problem+json`. The contract is in [DESIGN.md](./DESIGN.md#error-responses) under "Error responses".
+  `application/problem+json`. The contract is in [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md#error-responses) under "Error responses".
   - `ErrorResponseDto` + `ValidationErrorDto` replace the three single-field `*ResponseDto`s, and
     every handler in `GlobalExceptionHandler` builds its response through one helper that sets the
     status and content type.
@@ -204,7 +204,7 @@ Reflects the actual state of the code as of the date above.
   - Full suite: **41 tests green.**
 - **Health check — green.** `spring-boot-starter-actuator` added; `GET /actuator/health` returns
   **200** `{ "status": "UP", "groups": ["liveness", "readiness"] }`, or **503** `DOWN` when a check
-  fails. The contract is in [DESIGN.md](./DESIGN.md#3-health-check) under "3. Health check".
+  fails. The contract is in [HIGH_LEVEL_DESIGN.md](./system_design/HIGH_LEVEL_DESIGN.md#3-health-check) under "3. Health check".
   - No code of our own — Actuator provides the endpoint. The only setting added turns off its
     index page at `/actuator`, which would otherwise take that path away from `/{alias}`
     ([D5](./DECISIONS.md#d5--two-route-namespaces)).
@@ -229,7 +229,7 @@ Reflects the actual state of the code as of the date above.
     (after commit, [D18](./DECISIONS.md#d18--alias-created-is-logged-after-commit-via-an-event)),
     alias not found, alias too long, and broken link. The long URL is never logged, which fixed
     [R10](./DECISIONS.md#r10).
-  - Field contract in [DESIGN.md](./DESIGN.md#log-contract); plain vs. JSON and filtering with `jq`
+  - Field contract in [DESIGN_DEEP_DIVE.md](./system_design/DESIGN_DEEP_DIVE.md#log-contract); plain vs. JSON and filtering with `jq`
     in [WORKFLOW.md](./WORKFLOW.md#logs-plain-text-or-json).
   - Full suite: **61 tests green.**
 

@@ -3,7 +3,7 @@
 > How we build this project: **test-first (TDD)**, with the database provided by
 > containers. The app is *not* run-and-poke-in-Postman as the primary loop.
 
-_Last updated: 2026-11-02_
+_Last updated: 2026-11-10_
 
 ---
 
@@ -121,7 +121,7 @@ rebuild the image (`--build`) only when they pull new backend code — not part 
 Logs are **JSON by default**, one object per line
 ([D17](./DECISIONS.md#d17--structured-logging-ecs-json-domain-events-through-a-probe-no-long-urls)).
 The `local` profile switches back to plain text, which is easier to read while developing. The
-fields each line carries are listed in [DESIGN.md](./DESIGN.md#log-contract).
+fields each line carries are listed in [DESIGN_DEEP_DIVE.md](./system_design/DESIGN_DEEP_DIVE.md#log-contract).
 
 | How you run it | Logs |
 |----------------|------|

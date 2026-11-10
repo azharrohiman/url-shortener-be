@@ -14,6 +14,6 @@
 
 - [ ] Tests pass (`./mvnw test`)
 - [ ] New behaviour is covered by a test
-- [ ] Conforms to the contract in `docs/DESIGN.md`
+- [ ] Conforms to the contract in `docs/system_design/HIGH_LEVEL_DESIGN.md` and `docs/system_design/DESIGN_DEEP_DIVE.md`
 - [ ] `docs/DECISIONS.md` updated if a decision or trade-off was made
 - [ ] `docs/ROADMAP.md` status board updated if this completes a build-order step

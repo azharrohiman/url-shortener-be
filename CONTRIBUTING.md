@@ -171,6 +171,6 @@ your own machine.
 
 - Tests pass: `./mvnw test`
 - New behaviour has a test covering it
-- Endpoints and schema match [`docs/DESIGN.md`](./docs/DESIGN.md)
+- Endpoints match [`docs/system_design/HIGH_LEVEL_DESIGN.md`](./docs/system_design/HIGH_LEVEL_DESIGN.md) and schema matches [`docs/system_design/DESIGN_DEEP_DIVE.md`](./docs/system_design/DESIGN_DEEP_DIVE.md)
 - Any decision or trade-off is appended to [`docs/DECISIONS.md`](./docs/DECISIONS.md)
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) reflects what is now done
